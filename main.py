@@ -26,6 +26,44 @@ except ImportError:
     ToplevelBase = tk.Toplevel
     HAS_TTKB = False
 
+# ── مكونات واجهة ذكية تدعم التنسيق الحديث والوضع الليلي ──────────
+class UIFrame(ttkb.Frame if HAS_TTKB else tk.Frame):
+    def __init__(self, master=None, **kwargs):
+        if HAS_TTKB:
+            for k in ['bg', 'fg', 'pady', 'padx', 'relief', 'bd', 'highlightbackground', 'highlightthickness']: kwargs.pop(k, None)
+        super().__init__(master, **kwargs)
+
+class UILabel(ttkb.Label if HAS_TTKB else tk.Label):
+    def __init__(self, master=None, **kwargs):
+        if HAS_TTKB:
+            for k in ['bg', 'fg', 'activebackground', 'activeforeground', 'relief', 'bd', 'padx', 'pady']: kwargs.pop(k, None)
+        super().__init__(master, **kwargs)
+
+class UIButton(ttkb.Button if HAS_TTKB else tk.Button):
+    def __init__(self, master=None, **kwargs):
+        if HAS_TTKB:
+            for k in ['bg', 'fg', 'activebackground', 'activeforeground', 'relief', 'bd', 'font', 'padx', 'pady']: kwargs.pop(k, None)
+            txt = kwargs.get('text', '')
+            if 'حذف' in txt or '🗑' in txt: kwargs.setdefault('bootstyle', 'danger')
+            elif 'إلغاء' in txt: kwargs.setdefault('bootstyle', 'secondary')
+            elif 'حفظ' in txt or 'إضافة' in txt or '➕' in txt: kwargs.setdefault('bootstyle', 'success')
+            elif 'PDF' in txt: kwargs.setdefault('bootstyle', 'info')
+            else: kwargs.setdefault('bootstyle', 'primary')
+        super().__init__(master, **kwargs)
+
+class UIEntry(ttkb.Entry if HAS_TTKB else tk.Entry):
+    def __init__(self, master=None, **kwargs):
+        if HAS_TTKB:
+            for k in ['bg', 'fg', 'insertbackground', 'relief', 'bd', 'highlightthickness', 'highlightbackground', 'padx', 'pady']: kwargs.pop(k, None)
+        super().__init__(master, **kwargs)
+
+class UILabelFrame(ttkb.Labelframe if HAS_TTKB else tk.LabelFrame):
+    def __init__(self, master=None, **kwargs):
+        if HAS_TTKB:
+            for k in ['bg', 'fg', 'pady', 'padx', 'relief', 'bd', 'font', 'labelanchor']: kwargs.pop(k, None)
+            kwargs.setdefault('bootstyle', 'primary')
+        super().__init__(master, **kwargs)
+
 # ── دعم الرسوم البيانية ─────────────────────────────────────────
 try:
     import matplotlib
@@ -250,11 +288,11 @@ def fmt_num(n, dec=0):
         return "—"
 
 def lbl_entry(parent, text, row, col, width=16, readonly=False, colspan=1):
-    tk.Label(parent, text=text, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"], anchor="e").grid(row=row, column=col, sticky="e", padx=(6,2), pady=8)
+    UILabel(parent, text=text, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"], anchor="e").grid(row=row, column=col, sticky="e", padx=(6,2), pady=8)
     v = tk.StringVar()
     state = "readonly" if readonly else "normal"
     bg = "#e9ecef" if readonly else CLR["white"]
-    e = tk.Entry(parent, textvariable=v, width=width, font=FT_BODY, state=state, bg=bg, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
+    e = UIEntry(parent, textvariable=v, width=width, font=FT_BODY, state=state, bg=bg, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
     e.grid(row=row, column=col+1, sticky="ew", padx=(2,12), pady=8, columnspan=colspan)
     e.configure(justify="right")
     return v
@@ -297,41 +335,41 @@ class DailyRecordsWindow(ToplevelBase):
         self._load()
 
     def _build(self):
-        hdr = tk.Frame(self, bg=CLR["header"], pady=10)
+        hdr = UIFrame(self, bg=CLR["header"], pady=10)
         hdr.pack(fill="x")
         b_num = self.batch_info.get("batch_num") or self.batch_id
-        tk.Label(hdr, text=f"📅 السجلات اليومية — الدفعة رقم {b_num}", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
+        UILabel(hdr, text=f"📅 السجلات اليومية — الدفعة رقم {b_num}", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
 
-        inp = tk.LabelFrame(self, text="إضافة / تعديل سجل يومي", font=FT_HEADER, bg=CLR["daily_bg"], fg=CLR["accent"], padx=10, pady=8)
+        inp = UILabelFrame(self, text="إضافة / تعديل سجل يومي", font=FT_HEADER, bg=CLR["daily_bg"], fg=CLR["accent"], padx=10, pady=8)
         inp.pack(fill="x", padx=10, pady=8)
 
-        tk.Label(inp, text="التاريخ:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=0, sticky="e", padx=4)
+        UILabel(inp, text="التاريخ:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=0, sticky="e", padx=4)
         self.v_date = tk.StringVar(value=date.today().isoformat())
-        tk.Entry(inp, textvariable=self.v_date, width=14, font=FT_BODY, relief="solid").grid(row=0, column=1, padx=4)
+        UIEntry(inp, textvariable=self.v_date, width=14, font=FT_BODY, relief="solid").grid(row=0, column=1, padx=4)
 
-        tk.Label(inp, text="اليوم رقم:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=2, sticky="e", padx=4)
+        UILabel(inp, text="اليوم رقم:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=2, sticky="e", padx=4)
         self.v_daynum = tk.StringVar()
-        tk.Entry(inp, textvariable=self.v_daynum, width=6, font=FT_BODY, relief="solid").grid(row=0, column=3, padx=4)
+        UIEntry(inp, textvariable=self.v_daynum, width=6, font=FT_BODY, relief="solid").grid(row=0, column=3, padx=4)
 
-        tk.Label(inp, text="النافق (حبة):", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=4, sticky="e", padx=4)
+        UILabel(inp, text="النافق (حبة):", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=4, sticky="e", padx=4)
         self.v_dead = tk.StringVar(value="0")
-        tk.Entry(inp, textvariable=self.v_dead, width=8, font=FT_BODY, relief="solid").grid(row=0, column=5, padx=4)
+        UIEntry(inp, textvariable=self.v_dead, width=8, font=FT_BODY, relief="solid").grid(row=0, column=5, padx=4)
 
-        tk.Label(inp, text="العلف (كجم):", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=6, sticky="e", padx=4)
+        UILabel(inp, text="العلف (كجم):", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=0, column=6, sticky="e", padx=4)
         self.v_feed = tk.StringVar(value="0")
-        tk.Entry(inp, textvariable=self.v_feed, width=10, font=FT_BODY, relief="solid").grid(row=0, column=7, padx=4)
+        UIEntry(inp, textvariable=self.v_feed, width=10, font=FT_BODY, relief="solid").grid(row=0, column=7, padx=4)
 
-        tk.Label(inp, text="ملاحظة:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=1, column=0, sticky="e", padx=4, pady=4)
+        UILabel(inp, text="ملاحظة:", font=FT_SMALL, bg=CLR["daily_bg"]).grid(row=1, column=0, sticky="e", padx=4, pady=4)
         self.v_notes = tk.StringVar()
-        tk.Entry(inp, textvariable=self.v_notes, width=50, font=FT_BODY, relief="solid").grid(row=1, column=1, columnspan=6, padx=4, sticky="ew")
+        UIEntry(inp, textvariable=self.v_notes, width=50, font=FT_BODY, relief="solid").grid(row=1, column=1, columnspan=6, padx=4, sticky="ew")
 
-        btn_frm = tk.Frame(inp, bg=CLR["daily_bg"])
+        btn_frm = UIFrame(inp, bg=CLR["daily_bg"])
         btn_frm.grid(row=1, column=7, padx=4)
-        tk.Button(btn_frm, text="💾 حفظ", font=FT_BODY, bg=CLR["nav"], fg="white", cursor="hand2", relief="flat", padx=8, command=self._save_record).pack(side="right", padx=2)
-        tk.Button(btn_frm, text="🗑 حذف", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], cursor="hand2", relief="flat", padx=8, command=self._del_record).pack(side="right", padx=2)
+        UIButton(btn_frm, text="💾 حفظ", font=FT_BODY, bg=CLR["nav"], fg="white", cursor="hand2", relief="flat", padx=8, command=self._save_record).pack(side="right", padx=2)
+        UIButton(btn_frm, text="🗑 حذف", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], cursor="hand2", relief="flat", padx=8, command=self._del_record).pack(side="right", padx=2)
 
         cols = ("التاريخ","اليوم","النافق","تراكم النافق","العلف كجم","إجمالي العلف","ملاحظة")
-        frm = tk.Frame(self, bg=CLR["bg"])
+        frm = UIFrame(self, bg=CLR["bg"])
         frm.pack(fill="both", expand=True, padx=10, pady=5)
         self.tree = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
         
@@ -346,11 +384,11 @@ class DailyRecordsWindow(ToplevelBase):
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        sumfrm = tk.Frame(self, bg=CLR["info_bg"], pady=6, padx=10)
+        sumfrm = UIFrame(self, bg=CLR["info_bg"], pady=6, padx=10)
         sumfrm.pack(fill="x", padx=10, pady=4)
-        self.lbl_summary = tk.Label(sumfrm, text="", font=FT_BODY, bg=CLR["info_bg"], fg=CLR["accent"])
+        self.lbl_summary = UILabel(sumfrm, text="", font=FT_BODY, bg=CLR["info_bg"], fg=CLR["accent"])
         self.lbl_summary.pack(side="right")
-        tk.Button(self, text="📥 تصدير Excel", font=FT_BODY, bg=CLR["profit_bg"], fg=CLR["profit"], cursor="hand2", relief="flat", padx=10, pady=4, command=self._export_excel).pack(pady=6)
+        UIButton(self, text="📥 تصدير Excel", font=FT_BODY, bg=CLR["profit_bg"], fg=CLR["profit"], cursor="hand2", relief="flat", padx=10, pady=4, command=self._export_excel).pack(pady=6)
 
     def _load(self):
         rows = db.fetch_all("SELECT rec_date, day_num, dead_count, feed_kg, notes FROM daily_records WHERE batch_id=? ORDER BY rec_date", (self.batch_id,))
@@ -505,9 +543,9 @@ class BatchForm(ToplevelBase):
             self._load_batch()
 
     def _build_ui(self):
-        hdr = tk.Frame(self, bg=CLR["header"], pady=12)
+        hdr = UIFrame(self, bg=CLR["header"], pady=12)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="الملف المالي للدفعة", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
+        UILabel(hdr, text="الملف المالي للدفعة", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
 
         style = ttk.Style()
         if not HAS_TTKB: 
@@ -517,10 +555,10 @@ class BatchForm(ToplevelBase):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.tab_basic   = tk.Frame(self.notebook, bg=CLR["bg"], padx=20, pady=20)
-        self.tab_costs   = tk.Frame(self.notebook, bg=CLR["bg"], padx=20, pady=10)
-        self.tab_sales   = tk.Frame(self.notebook, bg=CLR["bg"], padx=20, pady=10)
-        self.tab_results = tk.Frame(self.notebook, bg=CLR["bg"], padx=20, pady=20)
+        self.tab_basic   = UIFrame(self.notebook, bg=CLR["bg"], padx=20, pady=20)
+        self.tab_costs   = UIFrame(self.notebook, bg=CLR["bg"], padx=20, pady=10)
+        self.tab_sales   = UIFrame(self.notebook, bg=CLR["bg"], padx=20, pady=10)
+        self.tab_results = UIFrame(self.notebook, bg=CLR["bg"], padx=20, pady=20)
 
         self.notebook.add(self.tab_basic,   text="📋 البيانات الأساسية")
         self.notebook.add(self.tab_costs,   text="💰 سجل التكاليف")
@@ -532,14 +570,14 @@ class BatchForm(ToplevelBase):
         self._build_sales_tab(self.tab_sales)
         self._build_results_tab(self.tab_results)
 
-        btn_frm = tk.Frame(self, bg=CLR["bg"], pady=10)
+        btn_frm = UIFrame(self, bg=CLR["bg"], pady=10)
         btn_frm.pack(fill="x")
-        tk.Button(btn_frm, text="💾 حفظ الدفعة", font=FT_HEADER, bg=CLR["nav"], fg="white", padx=30, pady=8, cursor="hand2", relief="flat", command=self._save).pack(side="right", padx=20)
+        UIButton(btn_frm, text="💾 حفظ الدفعة", font=FT_HEADER, bg=CLR["nav"], fg="white", padx=30, pady=8, cursor="hand2", relief="flat", command=self._save).pack(side="right", padx=20)
         
         if self.batch_id: 
-            tk.Button(btn_frm, text="📅 السجلات اليومية", font=FT_BODY, bg=CLR["daily_bg"], fg=CLR["accent"], padx=20, pady=8, cursor="hand2", relief="flat", bd=1, command=self._open_daily).pack(side="right", padx=4)
+            UIButton(btn_frm, text="📅 السجلات اليومية", font=FT_BODY, bg=CLR["daily_bg"], fg=CLR["accent"], padx=20, pady=8, cursor="hand2", relief="flat", bd=1, command=self._open_daily).pack(side="right", padx=4)
             
-        tk.Button(btn_frm, text="إلغاء وإغلاق", font=FT_BODY, bg="#e0e0e0", fg=CLR["text"], padx=20, pady=8, cursor="hand2", relief="solid", bd=1, command=self.destroy).pack(side="left", padx=20)
+        UIButton(btn_frm, text="إلغاء وإغلاق", font=FT_BODY, bg="#e0e0e0", fg=CLR["text"], padx=20, pady=8, cursor="hand2", relief="solid", bd=1, command=self.destroy).pack(side="left", padx=20)
 
     def _open_daily(self):
         if not self.batch_id: 
@@ -549,7 +587,7 @@ class BatchForm(ToplevelBase):
             DailyRecordsWindow(self, self.batch_id, dict(batch))
 
     def _build_basic_tab(self, F):
-        tk.Label(F, text="اسم العنبر *", font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=0, column=0, sticky="e", padx=(8,2), pady=10)
+        UILabel(F, text="اسم العنبر *", font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=0, column=0, sticky="e", padx=(8,2), pady=10)
         self.wh_var = tk.StringVar()
         self.wh_combo = ttk.Combobox(F, textvariable=self.wh_var, width=22, font=FT_BODY)
         self.wh_combo["values"] = [r["name"] for r in db.fetch_all("SELECT name FROM warehouses ORDER BY name")]
@@ -586,49 +624,49 @@ class BatchForm(ToplevelBase):
             if i > 0 and i % 3 == 0: 
                 row += 1
                 col = 0
-            tk.Label(F, text=lbl, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=row, column=col, sticky="e", padx=(8,2), pady=6)
+            UILabel(F, text=lbl, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=row, column=col, sticky="e", padx=(8,2), pady=6)
             v[key] = tk.StringVar()
-            e = tk.Entry(F, textvariable=v[key], width=16, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
+            e = UIEntry(F, textvariable=v[key], width=16, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
             e.grid(row=row, column=col+1, sticky="ew", padx=(0,20), pady=6)
             e.configure(justify="right")
             v[key].trace_add("write", lambda *a: self._auto_calc())
             col += 2
 
-        frm_tc = tk.Frame(F, bg=CLR["loss_bg"], pady=8, padx=15, bd=1, relief="solid")
+        frm_tc = UIFrame(F, bg=CLR["loss_bg"], pady=8, padx=15, bd=1, relief="solid")
         frm_tc.grid(row=row+1, column=0, columnspan=6, sticky="ew", pady=(20,0))
-        tk.Label(frm_tc, text="إجمالي التكاليف والمصروفات:", font=FT_HEADER, bg=CLR["loss_bg"], fg=CLR["loss"]).pack(side="right")
-        self.lbl_total_cost = tk.Label(frm_tc, text="0", font=("Arial",16,"bold"), bg=CLR["loss_bg"], fg=CLR["loss"])
+        UILabel(frm_tc, text="إجمالي التكاليف والمصروفات:", font=FT_HEADER, bg=CLR["loss_bg"], fg=CLR["loss"]).pack(side="right")
+        self.lbl_total_cost = UILabel(frm_tc, text="0", font=("Arial",16,"bold"), bg=CLR["loss_bg"], fg=CLR["loss"])
         self.lbl_total_cost.pack(side="right", padx=15)
 
     def _build_sales_tab(self, F):
         nb_sales = ttk.Notebook(F)
         nb_sales.pack(fill="both", expand=True, pady=5)
 
-        tab_farm = tk.Frame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
-        tab_mkt  = tk.Frame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
-        tab_oth  = tk.Frame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
+        tab_farm = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
+        tab_mkt  = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
+        tab_oth  = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
         
         nb_sales.add(tab_farm, text="🐓 مبيعات العنبر")
         nb_sales.add(tab_mkt,  text="🏢 مبيعات السوق")
         nb_sales.add(tab_oth,  text="💰 إيرادات أخرى")
 
         # ── 1. تبويب مبيعات العنبر ──
-        inp_f = tk.Frame(tab_farm, bg=CLR["bg"])
+        inp_f = UIFrame(tab_farm, bg=CLR["bg"])
         inp_f.pack(fill="x", pady=5)
-        tk.Label(inp_f, text="اسم العميل:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=4)
+        UILabel(inp_f, text="اسم العميل:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=4)
         self.v_fs_cust = tk.StringVar()
-        tk.Entry(inp_f, textvariable=self.v_fs_cust, width=20, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=4)
+        UIEntry(inp_f, textvariable=self.v_fs_cust, width=20, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=4)
         
-        tk.Label(inp_f, text="الكمية:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=2, padx=4)
+        UILabel(inp_f, text="الكمية:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=2, padx=4)
         self.v_fs_qty = tk.StringVar()
-        tk.Entry(inp_f, textvariable=self.v_fs_qty, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=3, padx=4)
+        UIEntry(inp_f, textvariable=self.v_fs_qty, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=3, padx=4)
         
-        tk.Label(inp_f, text="السعر:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=4, padx=4)
+        UILabel(inp_f, text="السعر:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=4, padx=4)
         self.v_fs_price = tk.StringVar()
-        tk.Entry(inp_f, textvariable=self.v_fs_price, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=4)
+        UIEntry(inp_f, textvariable=self.v_fs_price, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=4)
         
-        tk.Button(inp_f, text="➕ إضافة", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_farm_sale).grid(row=0,column=6, padx=15)
-        tk.Button(inp_f, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_farm_sale).grid(row=0,column=7, padx=4)
+        UIButton(inp_f, text="➕ إضافة", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_farm_sale).grid(row=0,column=6, padx=15)
+        UIButton(inp_f, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_farm_sale).grid(row=0,column=7, padx=4)
 
         f_cols = ("م", "اسم العميل", "الكمية", "السعر", "الإجمالي")
         self.tv_farm = ttk.Treeview(tab_farm, columns=f_cols, show="headings", selectmode="browse", height=8)
@@ -640,38 +678,38 @@ class BatchForm(ToplevelBase):
             
         self.tv_farm.pack(fill="both", expand=True, pady=5)
 
-        sum_f = tk.Frame(tab_farm, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
+        sum_f = UIFrame(tab_farm, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
         sum_f.pack(fill="x", pady=5)
-        self.lbl_cust_tot = tk.Label(sum_f, text="إجمالي مبيعات العنبر: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
+        self.lbl_cust_tot = UILabel(sum_f, text="إجمالي مبيعات العنبر: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
         self.lbl_cust_tot.pack(side="right")
 
         # ── 2. تبويب مبيعات السوق ──
-        inp_m = tk.Frame(tab_mkt, bg=CLR["bg"])
+        inp_m = UIFrame(tab_mkt, bg=CLR["bg"])
         inp_m.pack(fill="x", pady=5)
-        tk.Label(inp_m, text="مكتب التسويق:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=2)
+        UILabel(inp_m, text="مكتب التسويق:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=2)
         self.v_ms_office = tk.StringVar()
-        tk.Entry(inp_m, textvariable=self.v_ms_office, width=18, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=2)
+        UIEntry(inp_m, textvariable=self.v_ms_office, width=18, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=2)
         
-        tk.Label(inp_m, text="الكمية:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=2, padx=2)
+        UILabel(inp_m, text="الكمية:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=2, padx=2)
         self.v_ms_qty = tk.StringVar()
-        tk.Entry(inp_m, textvariable=self.v_ms_qty, width=8, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=3, padx=2)
+        UIEntry(inp_m, textvariable=self.v_ms_qty, width=8, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=3, padx=2)
         
-        tk.Label(inp_m, text="الوفيات:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=4, padx=2)
+        UILabel(inp_m, text="الوفيات:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=4, padx=2)
         self.v_ms_dead = tk.StringVar(value="0")
-        tk.Entry(inp_m, textvariable=self.v_ms_dead, width=6, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=2)
+        UIEntry(inp_m, textvariable=self.v_ms_dead, width=6, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=2)
         
-        tk.Label(inp_m, text="صافي الفاتورة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=6, padx=2)
+        UILabel(inp_m, text="صافي الفاتورة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=6, padx=2)
         self.v_ms_net = tk.StringVar()
-        tk.Entry(inp_m, textvariable=self.v_ms_net, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=7, padx=2)
+        UIEntry(inp_m, textvariable=self.v_ms_net, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=7, padx=2)
         
-        tk.Label(inp_m, text="رقم الفاتورة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=8, padx=2)
+        UILabel(inp_m, text="رقم الفاتورة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=8, padx=2)
         self.v_ms_inv = tk.StringVar()
-        tk.Entry(inp_m, textvariable=self.v_ms_inv, width=10, font=FT_BODY, relief="solid").grid(row=0,column=9, padx=2)
+        UIEntry(inp_m, textvariable=self.v_ms_inv, width=10, font=FT_BODY, relief="solid").grid(row=0,column=9, padx=2)
         
-        btn_m = tk.Frame(tab_mkt, bg=CLR["bg"])
+        btn_m = UIFrame(tab_mkt, bg=CLR["bg"])
         btn_m.pack(fill="x", pady=5)
-        tk.Button(btn_m, text="➕ إضافة لسجل السوق", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_market_sale).pack(side="right", padx=10)
-        tk.Button(btn_m, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_market_sale).pack(side="right", padx=4)
+        UIButton(btn_m, text="➕ إضافة لسجل السوق", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_market_sale).pack(side="right", padx=10)
+        UIButton(btn_m, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_market_sale).pack(side="right", padx=4)
 
         m_cols = ("م", "مكتب التسويق", "الكمية", "الوفيات", "المباع", "صافي الفاتورة", "رقم الفاتورة")
         self.tv_mkt = ttk.Treeview(tab_mkt, columns=m_cols, show="headings", selectmode="browse", height=7)
@@ -682,9 +720,9 @@ class BatchForm(ToplevelBase):
             
         self.tv_mkt.pack(fill="both", expand=True, pady=5)
 
-        sum_m = tk.Frame(tab_mkt, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
+        sum_m = UIFrame(tab_mkt, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
         sum_m.pack(fill="x", pady=5)
-        self.lbl_mkt_tot = tk.Label(sum_m, text="إجمالي مبيعات السوق: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
+        self.lbl_mkt_tot = UILabel(sum_m, text="إجمالي مبيعات السوق: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
         self.lbl_mkt_tot.pack(side="right")
 
         # ── 3. تبويب إيرادات أخرى ──
@@ -702,18 +740,18 @@ class BatchForm(ToplevelBase):
             if i > 0 and i % 2 == 0: 
                 row2 += 1
                 col2 = 0
-            tk.Label(tab_oth, text=lbl, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=row2, column=col2, sticky="e", padx=(8,2), pady=12)
+            UILabel(tab_oth, text=lbl, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=row2, column=col2, sticky="e", padx=(8,2), pady=12)
             v[key] = tk.StringVar()
-            e = tk.Entry(tab_oth, textvariable=v[key], width=20, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
+            e = UIEntry(tab_oth, textvariable=v[key], width=20, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
             e.grid(row=row2, column=col2+1, sticky="ew", padx=(0,30), pady=12)
             e.configure(justify="right")
             v[key].trace_add("write", lambda *a: self._auto_calc())
             col2 += 2
 
-        frm_tr = tk.Frame(F, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
+        frm_tr = UIFrame(F, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
         frm_tr.pack(fill="x", pady=(10,0))
-        tk.Label(frm_tr, text="إجمالي الإيرادات والمبيعات الكلي:", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"]).pack(side="right")
-        self.lbl_total_rev = tk.Label(frm_tr, text="0", font=("Arial",16,"bold"), bg=CLR["profit_bg"], fg=CLR["profit"])
+        UILabel(frm_tr, text="إجمالي الإيرادات والمبيعات الكلي:", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"]).pack(side="right")
+        self.lbl_total_rev = UILabel(frm_tr, text="0", font=("Arial",16,"bold"), bg=CLR["profit_bg"], fg=CLR["profit"])
         self.lbl_total_rev.pack(side="right", padx=15)
 
     def _add_farm_sale(self):
@@ -807,16 +845,16 @@ class BatchForm(ToplevelBase):
         
         v["notes"] = lbl_entry(F,"ملاحظات إضافية على الدفعة", 4, 0, 40, colspan=5)
 
-        frm_epef = tk.Frame(F, pady=5, padx=20, bg=CLR["info_bg"])
+        frm_epef = UIFrame(F, pady=5, padx=20, bg=CLR["info_bg"])
         frm_epef.grid(row=5, column=0, columnspan=6, sticky="ew", pady=(10,0))
-        tk.Label(frm_epef, text="مؤشر الكفاءة الأوروبي (EPEF):", font=("Arial",12,"bold"), bg=CLR["info_bg"]).pack(side="right")
-        self.lbl_epef = tk.Label(frm_epef, text="0", font=("Arial",14,"bold"), bg=CLR["info_bg"], fg=CLR["accent"])
+        UILabel(frm_epef, text="مؤشر الكفاءة الأوروبي (EPEF):", font=("Arial",12,"bold"), bg=CLR["info_bg"]).pack(side="right")
+        self.lbl_epef = UILabel(frm_epef, text="0", font=("Arial",14,"bold"), bg=CLR["info_bg"], fg=CLR["accent"])
         self.lbl_epef.pack(side="right", padx=20)
 
-        frm_net = tk.Frame(F, pady=15, padx=20, bd=2, relief="groove")
+        frm_net = UIFrame(F, pady=15, padx=20, bd=2, relief="groove")
         frm_net.grid(row=6, column=0, columnspan=6, sticky="ew", pady=(20,0))
-        tk.Label(frm_net, text="صافي النتيجة للدفعة:", font=("Arial",18,"bold"), bg=frm_net["bg"]).pack(side="right")
-        self.lbl_net = tk.Label(frm_net, text="0", font=("Arial",24,"bold"))
+        UILabel(frm_net, text="صافي النتيجة للدفعة:", font=("Arial",18,"bold"), bg=frm_net["bg"]).pack(side="right")
+        self.lbl_net = UILabel(frm_net, text="0", font=("Arial",24,"bold"))
         self.lbl_net.pack(side="right", padx=20)
         self._net_frame = frm_net
 
@@ -1076,17 +1114,17 @@ class DashboardWindow(ToplevelBase):
         self._build()
 
     def _build(self):
-        hdr = tk.Frame(self, bg=CLR["header"], pady=10)
+        hdr = UIFrame(self, bg=CLR["header"], pady=10)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="📈 لوحة القياس التفاعلية (Dashboard)", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
+        UILabel(hdr, text="📈 لوحة القياس التفاعلية (Dashboard)", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
 
         if not HAS_MATPLOTLIB:
-            tk.Label(self, text="مكتبة الرسوم البيانية (matplotlib) غير مثبتة", font=FT_HEADER, fg="red").pack(pady=50)
+            UILabel(self, text="مكتبة الرسوم البيانية (matplotlib) غير مثبتة", font=FT_HEADER, fg="red").pack(pady=50)
             return
 
         batches = db.fetch_all("SELECT * FROM v_batches ORDER BY date_in ASC")
         if not batches:
-            tk.Label(self, text="لا توجد بيانات كافية لعرض الرسوم البيانية.", font=FT_HEADER).pack(pady=50)
+            UILabel(self, text="لا توجد بيانات كافية لعرض الرسوم البيانية.", font=FT_HEADER).pack(pady=50)
             return
 
         labels = []
@@ -1139,18 +1177,18 @@ class WarehousesReportWindow(ToplevelBase):
         self._load()
 
     def _build(self):
-        hdr = tk.Frame(self, bg=CLR["header"], pady=10)
+        hdr = UIFrame(self, bg=CLR["header"], pady=10)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="📊 تقرير العنابر الشامل", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
+        UILabel(hdr, text="📊 تقرير العنابر الشامل", font=FT_TITLE, bg=CLR["header"], fg="white").pack(side="right", padx=16)
 
-        btn_frm = tk.Frame(self, bg=CLR["nav"], pady=6)
+        btn_frm = UIFrame(self, bg=CLR["nav"], pady=6)
         btn_frm.pack(fill="x")
-        tk.Button(btn_frm, text="📥 تصدير Excel (تحليلي شامل)", font=FT_BODY, bg=CLR["white"], fg=CLR["profit"], padx=10, pady=4, cursor="hand2", relief="flat", command=self._export_excel).pack(side="right", padx=6)
+        UIButton(btn_frm, text="📥 تصدير Excel (تحليلي شامل)", font=FT_BODY, bg=CLR["white"], fg=CLR["profit"], padx=10, pady=4, cursor="hand2", relief="flat", command=self._export_excel).pack(side="right", padx=6)
         
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=8, pady=8)
-        self.tab_by_wh = tk.Frame(nb, bg=CLR["bg"])
-        self.tab_overall = tk.Frame(nb, bg=CLR["bg"])
+        self.tab_by_wh = UIFrame(nb, bg=CLR["bg"])
+        self.tab_overall = UIFrame(nb, bg=CLR["bg"])
         nb.add(self.tab_by_wh, text="📦 ملخص حسب العنبر")
         nb.add(self.tab_overall, text="🏭 الملخص الإجمالي")
 
@@ -1178,7 +1216,7 @@ class WarehousesReportWindow(ToplevelBase):
         self.tree_all.tag_configure("loss", background="#fff0f0")
         self.tree_all.pack(fill="both", expand=True)
 
-        self.sum_frame = tk.Frame(self, bg=CLR["info_bg"], pady=8, padx=12)
+        self.sum_frame = UIFrame(self, bg=CLR["info_bg"], pady=8, padx=12)
         self.sum_frame.pack(fill="x")
 
     def _load(self):
@@ -1234,9 +1272,9 @@ class WarehousesReportWindow(ToplevelBase):
         ]
         
         for lbl, val in sum_items:
-            f = tk.Frame(self.sum_frame, bg=CLR["white"], padx=12, pady=4, relief="solid", bd=1)
+            f = UIFrame(self.sum_frame, bg=CLR["white"], padx=12, pady=4, relief="solid", bd=1)
             f.pack(side="right", padx=4)
-            tk.Label(f, text=lbl, font=FT_TINY, bg=CLR["white"], fg=CLR["text2"]).pack()
+            UILabel(f, text=lbl, font=FT_TINY, bg=CLR["white"], fg=CLR["text2"]).pack()
             
             val_color = CLR["header"]
             if "الإيرادات" in lbl or ("صافي" in lbl and "+" in val):
@@ -1244,7 +1282,7 @@ class WarehousesReportWindow(ToplevelBase):
             elif "التكاليف" in lbl or ("صافي" in lbl and "-" in val):
                 val_color = CLR["loss"]
                 
-            tk.Label(f, text=val, font=("Arial",11,"bold"), bg=CLR["white"], fg=val_color).pack()
+            UILabel(f, text=val, font=("Arial",11,"bold"), bg=CLR["white"], fg=val_color).pack()
 
     def _export_excel(self):
         if not HAS_OPENPYXL: 
@@ -1366,6 +1404,157 @@ class WarehousesReportWindow(ToplevelBase):
             pass
 
 # ════════════════════════════════════════════════════════════════
+# مستورد ملفات Excel الذكي
+# ════════════════════════════════════════════════════════════════
+class ExcelImporter:
+    """
+    يستورد ملفات Excel الخاصة بدفعة عنبر دواجن.
+    يبحث في الأوراق عن:
+      - كرت العنبر  → السجلات اليومية
+      - مبيعات العنبر → farm_sales
+      - ورقة التصفية → بيانات التكاليف والإيرادات
+    """
+    DAILY_SHEET_KEYWORDS  = ['كرت', 'يومي', 'اجمالي', 'علف', 'نافق']
+    SALES_SHEET_KEYWORDS  = ['مبيعات', 'عميل', 'عملاء']
+    SUMMARY_SHEET_KEYWORDS= ['تصفية', 'ملخص', 'حسابات', 'اجمالي', 'تكاليف']
+
+    def __init__(self, path):
+        self.path = path
+        self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        self.result = {}
+        self.errors = []
+        self.daily_rows = []
+        self.farm_sales = []
+
+    def _sheet_score(self, name, keywords):
+        return sum(1 for kw in keywords if kw in name)
+
+    def _find_sheet(self, keywords):
+        best, best_score = None, 0
+        for name in self.wb.sheetnames:
+            score = self._sheet_score(name, keywords)
+            if score > best_score:
+                best, best_score = name, score
+        return self.wb[best] if best else None
+
+    def _safe_float(self, v):
+        try:
+            return float(str(v).replace(',', '')) if v not in (None, '') else 0.0
+        except:
+            return 0.0
+
+    def _safe_int(self, v):
+        try:
+            return int(float(str(v).replace(',', ''))) if v not in (None, '') else 0
+        except:
+            return 0
+
+    def _parse_daily_sheet(self, ws):
+        rows = list(ws.iter_rows(values_only=True))
+        # find header row: contains 'التاريخ' or 'العمر'
+        header_row = 0
+        for i, row in enumerate(rows):
+            flat = [str(c) for c in row if c is not None]
+            if any('تاريخ' in c or 'عمر' in c or 'نافق' in c for c in flat):
+                header_row = i
+                break
+
+        daily = []
+        for row in rows[header_row+1:]:
+            date_val = row[0] if row else None
+            if date_val is None:
+                continue
+            # date might be datetime or string
+            if hasattr(date_val, 'strftime'):
+                rec_date = date_val.strftime('%Y-%m-%d')
+            else:
+                try:
+                    rec_date = datetime.strptime(str(date_val).strip(), '%Y-%m-%d').strftime('%Y-%m-%d')
+                except:
+                    continue
+
+            day_num   = self._safe_int(row[1] if len(row) > 1 else 0)
+            dead      = self._safe_int(row[3] if len(row) > 3 else 0)  # col D = نافق
+            feed_kg   = self._safe_float(row[6] if len(row) > 6 else 0) # col G = علف يومي
+
+            if rec_date:
+                daily.append({'rec_date': rec_date, 'day_num': day_num, 'dead_count': dead, 'feed_kg': feed_kg})
+        self.daily_rows = daily
+
+    def _parse_sales_sheet(self, ws):
+        rows = list(ws.iter_rows(values_only=True))
+        header_row = 0
+        for i, row in enumerate(rows):
+            flat = [str(c) for c in row if c is not None]
+            if any('عدد' in c or 'اسم' in c or 'قيمة' in c for c in flat):
+                header_row = i
+                break
+        sales = []
+        for row in rows[header_row+1:]:
+            if not row or row[2] is None:
+                continue
+            customer = str(row[2] or '').strip()
+            qty   = self._safe_int(row[3] if len(row) > 3 else 0)
+            val   = self._safe_float(row[5] if len(row) > 5 else 0)
+            price = round(val / qty, 2) if qty > 0 else 0
+            if customer and qty > 0:
+                sales.append({'customer': customer, 'qty': qty, 'price': price, 'total_val': val})
+        self.farm_sales = sales
+
+    def _parse_summary_sheet(self, ws):
+        mapping = {
+            'الكتاكيت': 'chicks', 'عدد الكتاكيت': 'chicks',
+            'العلف': 'feed_val', 'قيمة العلف': 'feed_val',
+            'نقل علف': 'feed_trans', 'أجور نقل': 'feed_trans',
+            'النشارة': 'sawdust_val', 'نشارة': 'sawdust_val',
+            'الغاز': 'gas_val', 'غاز': 'gas_val',
+            'المياه': 'water_val', 'مياة': 'water_val', 'مياه': 'water_val',
+            'الكهرباء': 'light_val', 'كهرباء': 'light_val',
+            'العلاجات': 'drugs_val', 'ادوية': 'drugs_val', 'أدوية بيطرية': 'drugs_val',
+            'الرواتب': 'breeders_pay', 'اجور': 'breeders_pay',
+            'الإيجار': 'rent_val', 'ايجار': 'rent_val',
+            'الصيانة': 'wh_expenses', 'صيانة': 'wh_expenses',
+            'نظافة': 'wash_val', 'تغسيل': 'wash_val',
+            'محروقات': 'other_costs', 'قرطاسية': 'admin_val',
+            'نتيجة الدفعة': 'net_result',
+            'اجمالي المصاريف': 'total_cost', 'الجمالي المصاريف': 'total_cost',
+            'الجمالي اليردات': 'total_rev', 'اجمالي الايرادات': 'total_rev',
+            'عدد المبيعات': 'total_sold',
+            'الوفيات في العنبر': 'total_dead', 'وفيات العنبر': 'total_dead',
+        }
+        d = {}
+        for row in ws.iter_rows(values_only=True):
+            label = str(row[0] or '').strip() if row else ''
+            value = row[2] if len(row) > 2 else None
+            if value is None and len(row) > 1:
+                value = row[1]
+            for key, db_col in mapping.items():
+                if key in label and value is not None:
+                    d[db_col] = self._safe_float(value)
+        self.result = d
+
+    def run(self):
+        # Parse daily records
+        ws_daily = self._find_sheet(self.DAILY_SHEET_KEYWORDS)
+        if ws_daily:
+            self._parse_daily_sheet(ws_daily)
+        else:
+            self.errors.append('لم يُعثر على ورقة السجلات اليومية (كرت العنبر)')
+
+        # Parse sales
+        ws_sales = self._find_sheet(self.SALES_SHEET_KEYWORDS)
+        if ws_sales:
+            self._parse_sales_sheet(ws_sales)
+
+        # Parse summary
+        ws_sum = self._find_sheet(self.SUMMARY_SHEET_KEYWORDS)
+        if ws_sum:
+            self._parse_summary_sheet(ws_sum)
+
+        return self
+
+
+# ════════════════════════════════════════════════════════════════
 # النافذة الرئيسية
 # ════════════════════════════════════════════════════════════════
 class MainWindow(WindowBase):
@@ -1386,52 +1575,121 @@ class MainWindow(WindowBase):
         self._build()
         self._load_batches()
 
+    def _change_theme(self, event):
+        if HAS_TTKB:
+            new_theme = self.theme_cbo.get()
+            try:
+                self.style.theme_use(new_theme)
+            except:
+                pass
+
     def _build(self):
-        hdr = tk.Frame(self, bg=CLR["header"], pady=10)
-        hdr.pack(fill="x")
-        tk.Label(hdr, text="🐔 نظام إدارة عنابر الدجاج اللاحم", font=("Arial",16,"bold"), bg=CLR["header"], fg="white").pack(side="right", padx=20)
-        self.lbl_count = tk.Label(hdr, text="", font=FT_BODY, bg=CLR["header"], fg="#aad4f5")
-        self.lbl_count.pack(side="left", padx=20)
-
-        tb = tk.Frame(self, bg=CLR["nav"], pady=6)
-        tb.pack(fill="x")
-        
-        main_btns = [
-            ("+ دفعة جديدة", self._new_batch, "#ffffff"),
-            ("✏️ تعديل", self._edit_batch, "#d0e8ff"),
-            ("🗑 حذف", self._del_batch, "#fce4d6"),
-            ("📅 السجلات اليومية", self._open_daily, "#fff2cc"),
-            ("📊 تقرير العنابر", self._open_wh_report, "#dce6f1"),
-            ("📈 لوحة القياس", self._open_dashboard, "#e2efda"),
-            ("🖨️ تصفية PDF", self._export_pdf, "#b3e5fc"),
-            ("💾 نسخ احتياطي", self._backup, "#f5f5f5")
-        ]
-        
-        for txt, cmd, bg in main_btns:
-            tk.Button(tb, text=txt, command=cmd, font=FT_SMALL, bg=bg, fg=CLR["text"], padx=8, pady=4, cursor="hand2", relief="flat").pack(side="right", padx=3)
-
-        fbar = tk.Frame(self, bg=CLR["bg"], pady=4)
-        fbar.pack(fill="x", padx=8)
-        
-        self.filter_wh = ttk.Combobox(fbar, width=20, font=FT_BODY)
-        self.filter_wh.pack(side="right", padx=4)
-        self.filter_wh.bind("<<ComboboxSelected>>", lambda e: self._load_batches())
-        
-        def clear_filters():
-            self.filter_wh.set("")
-            self._load_batches()
+        if HAS_TTKB:
+            hdr = ttkb.Frame(self, padding=10, bootstyle="primary")
+            hdr.pack(fill="x")
             
-        tk.Button(fbar, text="عرض الكل", font=FT_SMALL, command=clear_filters, bg=CLR["bg"], relief="flat").pack(side="right", padx=4)
+            ttkb.Label(hdr, text="🐔 نظام إدارة عنابر الدجاج اللاحم", font=("Arial",16,"bold"), bootstyle="inverse-primary").pack(side="right", padx=20)
+            self.lbl_count = ttkb.Label(hdr, text="", font=FT_BODY, bootstyle="inverse-primary")
+            self.lbl_count.pack(side="right", padx=20)
 
-        self.kpi_frame = tk.Frame(self, bg=CLR["bg"])
-        self.kpi_frame.pack(fill="x", padx=8, pady=4)
-        
-        frm = tk.Frame(self, bg=CLR["bg"])
-        frm.pack(fill="both", expand=True, padx=8, pady=(0,8))
-        
-        cols = ("رقم الدفعة","العنبر","تاريخ الدخول","تاريخ الخروج","الأيام","الكتاكيت","التكاليف","الإيرادات","صافي النتيجة","النافق%","معدل FCR","نصيب الشركة")
-        self.tree = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
-        
+            # Theme Switcher
+            themes = self.style.theme_names() if hasattr(self, 'style') else ttkb.Style().theme_names()
+            self.theme_cbo = ttkb.Combobox(hdr, values=themes, width=15, state="readonly", bootstyle="primary")
+            self.theme_cbo.pack(side="left", padx=10)
+            self.theme_cbo.set("lumen")
+            self.theme_cbo.bind("<<ComboboxSelected>>", self._change_theme)
+            ttkb.Label(hdr, text="المظهر (Theme):", font=FT_SMALL, bootstyle="inverse-primary").pack(side="left", padx=5)
+
+            tb = ttkb.Frame(self, padding=6, bootstyle="secondary")
+            tb.pack(fill="x")
+            
+            main_btns = [
+                ("+ دفعة جديدة", self._new_batch, "success", "إضافة دورة تسمين جديدة"),
+                ("✏️ تعديل", self._edit_batch, "warning", "تعديل تفاصيل الدفعة"),
+                ("🗑 حذف", self._del_batch, "danger", "حذف الدفعة المحددة نهائياً"),
+                ("📅 السجلات اليومية", self._open_daily, "info", "تسجيل النافق والعلف اليومي"),
+                ("📊 تقرير العنابر", self._open_wh_report, "primary", "استخراج تقرير مالي تحليلي"),
+                ("📈 لوحة القياس", self._open_dashboard, "success-outline", "عرض الرسوم البيانية للدفعة"),
+                ("🖨️ تصفية PDF", self._export_pdf, "info-outline", "تصدير التقرير النهائي كملف PDF"),
+                ("📥 استيراد Excel", self._import_excel, "warning-outline", "استيراد دفعة من ملف Excel"),
+                ("💾 نسخ احتياطي", self._backup, "secondary-outline", "أخذ نسخة احتياطية من البيانات")
+            ]
+            
+            for txt, cmd, bstyle, ttip in main_btns:
+                btn = ttkb.Button(tb, text=txt, command=cmd, bootstyle=bstyle, cursor="hand2")
+                btn.pack(side="right", padx=3)
+                if hasattr(ttkb, 'ToolTip'):
+                    ttkb.ToolTip(btn, text=ttip, bootstyle=bstyle)
+
+            fbar = ttkb.Frame(self, padding=4)
+            fbar.pack(fill="x", padx=8)
+            
+            self.filter_wh = ttkb.Combobox(fbar, width=20, font=FT_BODY)
+            self.filter_wh.pack(side="right", padx=4)
+            self.filter_wh.bind("<<ComboboxSelected>>", lambda e: self._load_batches())
+            
+            def clear_filters():
+                self.filter_wh.set("")
+                self._load_batches()
+                
+            ttkb.Button(fbar, text="عرض الكل", command=clear_filters, bootstyle="link").pack(side="right", padx=4)
+
+            self.kpi_frame = ttkb.Frame(self)
+            self.kpi_frame.pack(fill="x", padx=8, pady=4)
+            
+            frm = ttkb.Frame(self)
+            frm.pack(fill="both", expand=True, padx=8, pady=(0,8))
+            
+            cols = ("رقم الدفعة","العنبر","تاريخ الدخول","تاريخ الخروج","الأيام","الكتاكيت","التكاليف","الإيرادات","صافي النتيجة","النافق%","معدل FCR","نصيب الشركة")
+            self.tree = ttkb.Treeview(frm, columns=cols, show="headings", selectmode="browse", bootstyle="primary")
+            
+        else:
+            hdr = UIFrame(self, bg=CLR["header"], pady=10)
+            hdr.pack(fill="x")
+            UILabel(hdr, text="🐔 نظام إدارة عنابر الدجاج اللاحم", font=("Arial",16,"bold"), bg=CLR["header"], fg="white").pack(side="right", padx=20)
+            self.lbl_count = UILabel(hdr, text="", font=FT_BODY, bg=CLR["header"], fg="#aad4f5")
+            self.lbl_count.pack(side="left", padx=20)
+
+            tb = UIFrame(self, bg=CLR["nav"], pady=6)
+            tb.pack(fill="x")
+            
+            main_btns = [
+                ("+ دفعة جديدة", self._new_batch, "#ffffff"),
+                ("✏️ تعديل", self._edit_batch, "#d0e8ff"),
+                ("🗑 حذف", self._del_batch, "#fce4d6"),
+                ("📅 السجلات اليومية", self._open_daily, "#fff2cc"),
+                ("📊 تقرير العنابر", self._open_wh_report, "#dce6f1"),
+                ("📈 لوحة القياس", self._open_dashboard, "#e2efda"),
+                ("🖨️ تصفية PDF", self._export_pdf, "#b3e5fc"),
+                ("📥 استيراد Excel", self._import_excel, "#fff2cc"),
+                ("💾 نسخ احتياطي", self._backup, "#f5f5f5")
+            ]
+            
+            for txt, cmd, bg in main_btns:
+                UIButton(tb, text=txt, command=cmd, font=FT_SMALL, bg=bg, fg=CLR["text"], padx=8, pady=4, cursor="hand2", relief="flat").pack(side="right", padx=3)
+
+            fbar = UIFrame(self, bg=CLR["bg"], pady=4)
+            fbar.pack(fill="x", padx=8)
+            
+            self.filter_wh = ttk.Combobox(fbar, width=20, font=FT_BODY)
+            self.filter_wh.pack(side="right", padx=4)
+            self.filter_wh.bind("<<ComboboxSelected>>", lambda e: self._load_batches())
+            
+            def clear_filters():
+                self.filter_wh.set("")
+                self._load_batches()
+                
+            UIButton(fbar, text="عرض الكل", font=FT_SMALL, command=clear_filters, bg=CLR["bg"], relief="flat").pack(side="right", padx=4)
+
+            self.kpi_frame = UIFrame(self, bg=CLR["bg"])
+            self.kpi_frame.pack(fill="x", padx=8, pady=4)
+            
+            frm = UIFrame(self, bg=CLR["bg"])
+            frm.pack(fill="both", expand=True, padx=8, pady=(0,8))
+            
+            cols = ("رقم الدفعة","العنبر","تاريخ الدخول","تاريخ الخروج","الأيام","الكتاكيت","التكاليف","الإيرادات","صافي النتيجة","النافق%","معدل FCR","نصيب الشركة")
+            self.tree = ttk.Treeview(frm, columns=cols, show="headings", selectmode="browse")
+
         widths_m = [80, 150, 100, 100, 50, 90, 110, 110, 120, 70, 80, 110]
         for c, w in zip(cols, widths_m): 
             self.tree.heading(c, text=c, anchor="center")
@@ -1440,8 +1698,11 @@ class MainWindow(WindowBase):
                 anc = "e"
             self.tree.column(c, width=w, anchor=anc)
             
-        self.tree.tag_configure("profit", background="#f0f9ea")
-        self.tree.tag_configure("loss", background="#fff0f0")
+        # Ignore custom hardcoded tree colors when TTK is active so it follows theme.
+        if not HAS_TTKB:
+            self.tree.tag_configure("profit", background="#f0f9ea")
+            self.tree.tag_configure("loss", background="#fff0f0")
+            
         self.tree.bind("<Double-1>", lambda e: self._edit_batch())
         
         sb_y = ttk.Scrollbar(frm, command=self.tree.yview)
@@ -1484,20 +1745,38 @@ class MainWindow(WindowBase):
             w.destroy()
             
         sign_net = "+" if T['net'] >= 0 else ""
-        kpis = [
-            ("الدفعات", str(len(rows)), "#dce6f1", CLR["header"]), 
-            ("إجمالي الكتاكيت", fmt_num(T["chicks"]), "#dce6f1", CLR["header"]), 
-            ("إجمالي التكاليف", fmt_num(T["cost"]), CLR["loss_bg"], CLR["loss"]), 
-            ("إجمالي الإيرادات",fmt_num(T["rev"]), CLR["profit_bg"], CLR["profit"]), 
-            ("صافي النتيجة", f"{sign_net}{fmt_num(T['net'])}", CLR["profit_bg"] if T["net"]>=0 else CLR["loss_bg"], CLR["profit"] if T["net"]>=0 else CLR["loss"]), 
-            ("نصيب الشركة", fmt_num(T["share"]), "#fff2cc", CLR["warn"])
-        ]
         
-        for lbl, val, bg, fg in kpis:
-            frm = tk.Frame(self.kpi_frame, bg=bg, padx=12, pady=6, relief="solid", bd=1)
-            frm.pack(side="right", padx=3)
-            tk.Label(frm, text=lbl, font=FT_SMALL, bg=bg, fg=CLR["text2"]).pack()
-            tk.Label(frm, text=val, font=("Arial",12,"bold"), bg=bg, fg=fg).pack()
+        if HAS_TTKB:
+            kpis = [
+                ("الدفعات", str(len(rows)), "primary", "secondary"), 
+                ("إجمالي الكتاكيت", fmt_num(T["chicks"]), "info", "secondary"), 
+                ("إجمالي التكاليف", fmt_num(T["cost"]), "danger", "secondary"), 
+                ("إجمالي الإيرادات",fmt_num(T["rev"]), "success", "secondary"), 
+                ("صافي النتيجة", f"{sign_net}{fmt_num(T['net'])}", "success" if T["net"]>=0 else "danger", "success" if T["net"]>=0 else "danger"), 
+                ("نصيب الشركة", fmt_num(T["share"]), "warning", "secondary")
+            ]
+            
+            for lbl, val, val_bstyle, frm_bstyle in kpis:
+                # To make KPI card, we use nested frames or standard text but styled
+                lfrm = ttkb.Frame(self.kpi_frame, padding=8)
+                lfrm.pack(side="right", padx=5)
+                ttkb.Label(lfrm, text=lbl, font=FT_SMALL, bootstyle=frm_bstyle).pack()
+                ttkb.Label(lfrm, text=val, font=("Arial",14,"bold"), bootstyle=val_bstyle).pack()
+        else:
+            kpis = [
+                ("الدفعات", str(len(rows)), "#dce6f1", CLR["header"]), 
+                ("إجمالي الكتاكيت", fmt_num(T["chicks"]), "#dce6f1", CLR["header"]), 
+                ("إجمالي التكاليف", fmt_num(T["cost"]), CLR["loss_bg"], CLR["loss"]), 
+                ("إجمالي الإيرادات",fmt_num(T["rev"]), CLR["profit_bg"], CLR["profit"]), 
+                ("صافي النتيجة", f"{sign_net}{fmt_num(T['net'])}", CLR["profit_bg"] if T["net"]>=0 else CLR["loss_bg"], CLR["profit"] if T["net"]>=0 else CLR["loss"]), 
+                ("نصيب الشركة", fmt_num(T["share"]), "#fff2cc", CLR["warn"])
+            ]
+            
+            for lbl, val, bg, fg in kpis:
+                frm = UIFrame(self.kpi_frame, bg=bg, padx=12, pady=6, relief="solid", bd=1)
+                frm.pack(side="right", padx=3)
+                UILabel(frm, text=lbl, font=FT_SMALL, bg=bg, fg=CLR["text2"]).pack()
+                UILabel(frm, text=val, font=("Arial",12,"bold"), bg=bg, fg=fg).pack()
             
         self.lbl_count.config(text=f"{len(rows)} دفعة مسجلة")
 
@@ -1540,6 +1819,126 @@ class MainWindow(WindowBase):
     def _backup(self):
         make_backup()
         messagebox.showinfo("نسخ احتياطي", "تم حفظ النسخة الاحتياطية بنجاح")
+
+    def _import_excel(self):
+        """استيراد دفعة عنبر من ملف Excel — يدعم التنسيق الخاص بالنظام"""
+        if not HAS_OPENPYXL:
+            return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.\nنفّذ: pip install openpyxl", parent=self)
+
+        # المسار الافتراضي المقترح
+        default_dir = r"C:\Users\user\Desktop"
+        path = filedialog.askopenfilename(
+            title="اختر ملف Excel للدفعة",
+            initialdir=default_dir,
+            filetypes=[("Excel Files", "*.xlsx *.xls"), ("All Files", "*.*")],
+            parent=self
+        )
+        if not path:
+            return
+
+        try:
+            importer = ExcelImporter(path).run()
+        except Exception as e:
+            return messagebox.showerror("خطأ في قراءة الملف", str(e), parent=self)
+
+        # ── اختيار أو إنشاء العنبر ──
+        wh_names = [r["name"] for r in db.fetch_all("SELECT name FROM warehouses ORDER BY name")]
+        if not wh_names:
+            wh_name = tk.simpledialog.askstring("اسم العنبر", "أدخل اسم العنبر:", parent=self)
+            if not wh_name:
+                return
+        else:
+            dlg = tk.Toplevel(self)
+            dlg.title("تحديد العنبر")
+            dlg.geometry("300x150")
+            dlg.grab_set()
+            UILabel(dlg, text="اختر اسم العنبر:").pack(pady=10)
+            wh_var = tk.StringVar(value=wh_names[0])
+            ttk.Combobox(dlg, textvariable=wh_var, values=wh_names, state="readonly").pack(padx=20, fill="x")
+            UIButton(dlg, text="موافق", command=dlg.destroy).pack(pady=10)
+            dlg.wait_window()
+            wh_name = wh_var.get().strip()
+
+        if not wh_name:
+            return
+
+        # ── بيانات الدفعة الأساسية ──
+        d = importer.result
+        chicks = int(d.get('chicks', 0))
+        if chicks == 0:
+            # حساب من السجلات اليومية إن وجدت
+            if importer.daily_rows:
+                chicks_raw = tk.simpledialog.askinteger("كتاكيت", "عدد الكتاكيت المستلمة:", parent=self, minvalue=1)
+                if not chicks_raw:
+                    return
+                chicks = chicks_raw
+
+        date_in  = importer.daily_rows[0]['rec_date'] if importer.daily_rows else date.today().isoformat()
+        date_out = importer.daily_rows[-1]['rec_date'] if importer.daily_rows else date.today().isoformat()
+        days_count = (datetime.strptime(date_out, '%Y-%m-%d') - datetime.strptime(date_in, '%Y-%m-%d')).days or 1
+
+        total_dead   = sum(r['dead_count'] for r in importer.daily_rows)
+        mort_rate    = round(total_dead / chicks * 100, 2) if chicks > 0 else 0
+        f_cust_qty   = sum(s['qty'] for s in importer.farm_sales)
+        f_cust_val   = sum(s['total_val'] for s in importer.farm_sales)
+        total_cost   = d.get('total_cost', 0)
+        total_rev    = d.get('total_rev', 0) or f_cust_val
+        net_result   = d.get('net_result', total_rev - total_cost)
+
+        # ── إضافة أو تحديث العنبر ──
+        wh = db.fetch_one("SELECT id FROM warehouses WHERE name=?", (wh_name,))
+        if not wh:
+            db.execute("INSERT INTO warehouses (name) VALUES (?)", (wh_name,))
+            wh = db.fetch_one("SELECT id FROM warehouses WHERE name=?", (wh_name,))
+        wh_id = wh['id']
+
+        # ── إنشاء الدفعة ──
+        b_num = os.path.splitext(os.path.basename(path))[0][:30]
+        batch_id = db.execute("""
+            INSERT INTO batches (
+                warehouse_id, batch_num, date_in, date_out, days, chicks,
+                feed_qty, feed_val, feed_trans, sawdust_val, gas_val, water_val,
+                drugs_val, wh_expenses, breeders_pay, rent_val, light_val,
+                admin_val, wash_val, other_costs,
+                total_cost, cust_qty, cust_val, total_rev, total_sold,
+                total_dead, mort_rate, net_result, created_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+        """, (
+            wh_id, b_num, date_in, date_out, days_count, chicks,
+            d.get('feed_qty', 0), d.get('feed_val', 0), d.get('feed_trans', 0),
+            d.get('sawdust_val', 0), d.get('gas_val', 0), d.get('water_val', 0),
+            d.get('drugs_val', 0), d.get('wh_expenses', 0), d.get('breeders_pay', 0),
+            d.get('rent_val', 0), d.get('light_val', 0), d.get('admin_val', 0),
+            d.get('wash_val', 0), d.get('other_costs', 0),
+            total_cost, int(f_cust_qty), f_cust_val, total_rev, int(f_cust_qty),
+            total_dead, mort_rate, net_result
+        ))
+
+        # ── إدراج السجلات اليومية ──
+        for r in importer.daily_rows:
+            db.execute("""
+                INSERT OR IGNORE INTO daily_records (batch_id, rec_date, day_num, dead_count, feed_kg)
+                VALUES (?, ?, ?, ?, ?)
+            """, (batch_id, r['rec_date'], r['day_num'], r['dead_count'], r['feed_kg']))
+
+        # ── إدراج مبيعات العنبر ──
+        for s in importer.farm_sales:
+            db.execute("""
+                INSERT INTO farm_sales (batch_id, customer, qty, price, total_val)
+                VALUES (?, ?, ?, ?, ?)
+            """, (batch_id, s['customer'], s['qty'], s['price'], s['total_val']))
+
+        self._load_batches()
+        msgs = [f"✅ تم استيراد الدفعة بنجاح!",
+                f"📦 العنبر: {wh_name}",
+                f"🐔 الكتاكيت: {chicks:,}",
+                f"📅 المدة: {date_in} ← {date_out} ({days_count} يوم)",
+                f"💀 إجمالي النافق: {total_dead:,} ({mort_rate}%)",
+                f"📊 السجلات اليومية المستوردة: {len(importer.daily_rows)}",
+                f"🛒 مبيعات العنبر: {len(importer.farm_sales)} سجل"]
+        if importer.errors:
+            msgs.append("\n⚠️ تحذيرات: " + ' | '.join(importer.errors))
+        messagebox.showinfo("تم الاستيراد", '\n'.join(msgs), parent=self)
 
     def _export_pdf(self):
         if not HAS_FPDF:
