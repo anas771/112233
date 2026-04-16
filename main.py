@@ -274,7 +274,7 @@ def make_backup():
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = os.path.join(bk_dir, f"poultry_data_{ts}.db")
     shutil.copy2(DB_PATH, dest)
-    files = sorted(os.listdir(bk_dir))
+    files = sorted([f for f in os.listdir(bk_dir) if f.startswith("poultry_data_") and f.endswith(".db")])
     while len(files) > 10: 
         os.remove(os.path.join(bk_dir, files.pop(0)))
     return dest
@@ -1187,7 +1187,7 @@ class WarehousesReportWindow(ToplevelBase):
         for b in batches:
             wh = b["warehouse_name"]
             if wh not in wh_data: 
-                wh_data[wh] = {"count":0,"chicks":0,"cost":0,"rev":0,"net":0,"mort_sum":0,"avg_price_sum":0}
+                wh_data[wh] = {"count":0,"chicks":0,"cost":0,"rev":0,"net":0,"mort_sum":0,"sold_sum":0,"cust_mkt_val_sum":0}
             d = wh_data[wh]
             d["count"] += 1
             d["chicks"] += b["chicks"] or 0
@@ -1195,7 +1195,8 @@ class WarehousesReportWindow(ToplevelBase):
             d["rev"] += b["total_rev"] or 0
             d["net"] += b["net_result"] or 0
             d["mort_sum"] += b["mort_rate"] or 0
-            d["avg_price_sum"] += b["avg_price"] or 0
+            d["sold_sum"] += b["total_sold"] or 0
+            d["cust_mkt_val_sum"] += (b["cust_val"] or 0) + (b["mkt_val"] or 0)
 
         self.tree_wh.delete(*self.tree_wh.get_children())
         for wh, d in wh_data.items():
@@ -1204,7 +1205,8 @@ class WarehousesReportWindow(ToplevelBase):
             avg_p = 0
             if d["count"] > 0:
                 avg_m = d["mort_sum"]/d["count"]
-                avg_p = d["avg_price_sum"]/d["count"]
+            if d["sold_sum"] > 0:
+                avg_p = d["cust_mkt_val_sum"]/d["sold_sum"]
             self.tree_wh.insert("", "end", tags=(tag,), values=(wh, d["count"], fmt_num(d["chicks"]), fmt_num(d["cost"]), fmt_num(d["rev"]), f"{'+'if d['net']>=0 else ''}{fmt_num(d['net'])}", f"{avg_m:.1f}%", fmt_num(avg_p)))
 
         self.tree_all.delete(*self.tree_all.get_children())
