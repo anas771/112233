@@ -639,19 +639,26 @@ class BatchForm(ToplevelBase):
         self.lbl_total_cost.pack(side="right", padx=15)
 
     def _build_sales_tab(self, F):
-        nb_sales = ttk.Notebook(F)
-        nb_sales.pack(fill="both", expand=True, pady=5)
-
-        tab_farm = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
-        tab_mkt  = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
-        tab_oth  = UIFrame(nb_sales, bg=CLR["bg"], padx=10, pady=10)
+        # حاوية رئيسية تسمح بالتمرير إذا زاد المحتوى
+        canvas = tk.Canvas(F, bg=CLR["bg"], highlightthickness=0)
+        v_scroll = ttk.Scrollbar(F, orient="vertical", command=canvas.yview)
+        scroll_frm = UIFrame(canvas, bg=CLR["bg"])
         
-        nb_sales.add(tab_farm, text="🐓 مبيعات العنبر")
-        nb_sales.add(tab_mkt,  text="🏢 مبيعات السوق")
-        nb_sales.add(tab_oth,  text="💰 إيرادات أخرى")
+        canvas.configure(yscrollcommand=v_scroll.set)
+        canvas.pack(side="right", fill="both", expand=True)
+        v_scroll.pack(side="left", fill="y")
+        
+        canvas.create_window((0,0), window=scroll_frm, anchor="nw", width=1040) # عرض ثابت تقريباً
+        
+        def _on_cfg(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        scroll_frm.bind("<Configure>", _on_cfg)
 
-        # ── 1. تبويب مبيعات العنبر ──
-        inp_f = UIFrame(tab_farm, bg=CLR["bg"])
+        # ── 1. القسم العلوي: مبيعات العنبر ──
+        f_frm = UILabelFrame(scroll_frm, text="🐓 بيان مبيعات العنبر", font=FT_HEADER, bg=CLR["bg"], fg=CLR["nav"], padx=10, pady=10)
+        f_frm.pack(fill="x", pady=(0,15))
+        
+        inp_f = UIFrame(f_frm, bg=CLR["bg"])
         inp_f.pack(fill="x", pady=5)
         UILabel(inp_f, text="اسم العميل:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=4)
         self.v_fs_cust = tk.StringVar()
@@ -666,27 +673,28 @@ class BatchForm(ToplevelBase):
         UIEntry(inp_f, textvariable=self.v_fs_price, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=4)
         
         UIButton(inp_f, text="➕ إضافة", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_farm_sale).grid(row=0,column=6, padx=15)
-        UIButton(inp_f, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_farm_sale).grid(row=0,column=7, padx=4)
+        UIButton(inp_f, text="🗑 حذف", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_farm_sale).grid(row=0,column=7, padx=4)
 
         f_cols = ("م", "اسم العميل", "الكمية", "السعر", "الإجمالي")
-        self.tv_farm = ttk.Treeview(tab_farm, columns=f_cols, show="headings", selectmode="browse", height=8)
-        
+        self.tv_farm = ttk.Treeview(f_frm, columns=f_cols, show="headings", selectmode="browse", height=6)
         widths_f = [40, 250, 100, 100, 150]
         for c, w in zip(f_cols, widths_f): 
             self.tv_farm.heading(c, text=c, anchor="center")
             self.tv_farm.column(c, width=w, anchor="center")
-            
         self.tv_farm.pack(fill="both", expand=True, pady=5)
 
-        sum_f = UIFrame(tab_farm, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
-        sum_f.pack(fill="x", pady=5)
-        self.lbl_cust_tot = UILabel(sum_f, text="إجمالي مبيعات العنبر: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
+        sum_f = UIFrame(f_frm, bg=CLR["profit_bg"], pady=5, padx=15)
+        sum_f.pack(fill="x")
+        self.lbl_cust_tot = UILabel(sum_f, text="إجمالي مبيعات العنبر: 0 طائر | 0 ريال", font=FT_BODY, bg=CLR["profit_bg"], fg=CLR["profit"])
         self.lbl_cust_tot.pack(side="right")
 
-        # ── 2. تبويب مبيعات السوق ──
-        inp_m = UIFrame(tab_mkt, bg=CLR["bg"])
+        # ── 2. القسم الأوسط: مبيعات السوق ──
+        m_frm = UILabelFrame(scroll_frm, text="🏢 بيان مبيعات السوق (المكاتب)", font=FT_HEADER, bg=CLR["bg"], fg=CLR["accent"], padx=10, pady=10)
+        m_frm.pack(fill="x", pady=15)
+        
+        inp_m = UIFrame(m_frm, bg=CLR["bg"])
         inp_m.pack(fill="x", pady=5)
-        UILabel(inp_m, text="مكتب التسويق:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=2)
+        UILabel(inp_m, text="المكتب:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=2)
         self.v_ms_office = tk.StringVar()
         UIEntry(inp_m, textvariable=self.v_ms_office, width=18, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=2)
         
@@ -702,57 +710,53 @@ class BatchForm(ToplevelBase):
         self.v_ms_net = tk.StringVar()
         UIEntry(inp_m, textvariable=self.v_ms_net, width=10, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=7, padx=2)
         
-        UILabel(inp_m, text="رقم الفاتورة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=8, padx=2)
-        self.v_ms_inv = tk.StringVar()
-        UIEntry(inp_m, textvariable=self.v_ms_inv, width=10, font=FT_BODY, relief="solid").grid(row=0,column=9, padx=2)
-        
-        btn_m = UIFrame(tab_mkt, bg=CLR["bg"])
-        btn_m.pack(fill="x", pady=5)
-        UIButton(btn_m, text="➕ إضافة لسجل السوق", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_market_sale).pack(side="right", padx=10)
-        UIButton(btn_m, text="🗑 حذف المحدد", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_market_sale).pack(side="right", padx=4)
+        UIButton(inp_m, text="➕ إضافة", font=FT_BODY, bg=CLR["nav"], fg="white", relief="flat", cursor="hand2", command=self._add_market_sale).grid(row=0,column=8, padx=10)
+        UIButton(inp_m, text="🗑 حذف", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], relief="flat", cursor="hand2", command=self._del_market_sale).grid(row=0,column=9, padx=2)
 
         m_cols = ("م", "مكتب التسويق", "الكمية", "الوفيات", "المباع", "صافي الفاتورة", "رقم الفاتورة")
-        self.tv_mkt = ttk.Treeview(tab_mkt, columns=m_cols, show="headings", selectmode="browse", height=7)
-        widths_m = [40, 200, 80, 80, 80, 120, 120]
+        self.tv_mkt = ttk.Treeview(m_frm, columns=m_cols, show="headings", selectmode="browse", height=6)
+        widths_m = [40, 200, 80, 80, 80, 110, 110]
         for c, w in zip(m_cols, widths_m): 
             self.tv_mkt.heading(c, text=c, anchor="center")
             self.tv_mkt.column(c, width=w, anchor="center")
-            
         self.tv_mkt.pack(fill="both", expand=True, pady=5)
 
-        sum_m = UIFrame(tab_mkt, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
-        sum_m.pack(fill="x", pady=5)
-        self.lbl_mkt_tot = UILabel(sum_m, text="إجمالي مبيعات السوق: 0 طائر | 0 ريال", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"])
+        sum_m = UIFrame(m_frm, bg=CLR["profit_bg"], pady=5, padx=15)
+        sum_m.pack(fill="x")
+        self.lbl_mkt_tot = UILabel(sum_m, text="إجمالي مبيعات السوق: 0 طائر | 0 ريال", font=FT_BODY, bg=CLR["profit_bg"], fg=CLR["profit"])
         self.lbl_mkt_tot.pack(side="right")
 
-        # ── 3. تبويب إيرادات أخرى ──
+        # ── 3. القسم السفلي: إيرادات أخرى ──
+        o_frm = UILabelFrame(scroll_frm, text="💰 إيرادات وضبط مالي إضافي", font=FT_HEADER, bg=CLR["bg"], fg="#607d8b", padx=10, pady=10)
+        o_frm.pack(fill="x", pady=(15,0))
+        
         v = self._vars
         rev_fields = [
-            ("offal_val","مبيعات ذبيل (قيمة)"),
-            ("feed_sale","مبيعات علف (قيمة)"),
-            ("feed_trans_r","علف منقول لعنابر أخرى (قيمة)"),
-            ("drug_return","مرتجع علاجات"),
+            ("offal_val","مبيعات ذبيل (قيمة)"), ("feed_sale","مبيعات علف (قيمة)"),
+            ("feed_trans_r","علف منقول لعنابر (قيمة)"), ("drug_return","مرتجع علاجات"),
             ("gas_return","نقل غاز/نشارة")
         ]
-        row2 = 0
-        col2 = 0
+        rf = UIFrame(o_frm, bg=CLR["bg"])
+        rf.pack(fill="x")
+        row2, col2 = 0, 0
         for i, (key, lbl) in enumerate(rev_fields):
-            if i > 0 and i % 2 == 0: 
+            if i > 0 and i % 3 == 0: 
                 row2 += 1
                 col2 = 0
-            UILabel(tab_oth, text=lbl, font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=row2, column=col2, sticky="e", padx=(8,2), pady=12)
+            UILabel(rf, text=lbl, font=FT_SMALL, bg=CLR["bg"]).grid(row=row2, column=col2, sticky="e", padx=(8,2), pady=8)
             v[key] = tk.StringVar()
-            e = UIEntry(tab_oth, textvariable=v[key], width=20, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
-            e.grid(row=row2, column=col2+1, sticky="ew", padx=(0,30), pady=12)
+            e = UIEntry(rf, textvariable=v[key], width=14, font=FT_BODY, relief="solid")
+            e.grid(row=row2, column=col2+1, sticky="ew", padx=(0,15), pady=8)
             e.configure(justify="right")
             v[key].trace_add("write", lambda *a: self._auto_calc())
             col2 += 2
 
-        frm_tr = UIFrame(F, bg=CLR["profit_bg"], pady=8, padx=15, bd=1, relief="solid")
-        frm_tr.pack(fill="x", pady=(10,0))
-        UILabel(frm_tr, text="إجمالي الإيرادات والمبيعات الكلي:", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"]).pack(side="right")
-        self.lbl_total_rev = UILabel(frm_tr, text="0", font=("Arial",16,"bold"), bg=CLR["profit_bg"], fg=CLR["profit"])
-        self.lbl_total_rev.pack(side="right", padx=15)
+        # الملخص النهائي للمبيعات (دائم الظهور في تذييل التبويب)
+        sum_total = UIFrame(F, bg=CLR["profit_bg"], pady=10, padx=20, bd=1, relief="ridge")
+        sum_total.pack(fill="x", side="bottom")
+        UILabel(sum_total, text="إجمالي الإيرادات والمبيعات (بيان موحد):", font=FT_HEADER, bg=CLR["profit_bg"], fg=CLR["profit"]).pack(side="right")
+        self.lbl_total_rev = UILabel(sum_total, text="0", font=("Arial",18,"bold"), bg=CLR["profit_bg"], fg=CLR["profit"])
+        self.lbl_total_rev.pack(side="right", padx=20)
 
     def _add_farm_sale(self):
         c = self.v_fs_cust.get().strip()
@@ -853,7 +857,7 @@ class BatchForm(ToplevelBase):
 
         frm_net = UIFrame(F, pady=15, padx=20, bd=2, relief="groove")
         frm_net.grid(row=6, column=0, columnspan=6, sticky="ew", pady=(20,0))
-        UILabel(frm_net, text="صافي النتيجة للدفعة:", font=("Arial",18,"bold"), bg=frm_net["bg"]).pack(side="right")
+        UILabel(frm_net, text="صافي النتيجة للدفعة:", font=("Arial",18,"bold")).pack(side="right")
         self.lbl_net = UILabel(frm_net, text="0", font=("Arial",24,"bold"))
         self.lbl_net.pack(side="right", padx=20)
         self._net_frame = frm_net
@@ -939,24 +943,27 @@ class BatchForm(ToplevelBase):
             if days > 0 and chicks > 0 and avg_weight > 0:
                 epef = ((100 - mort_rate) * avg_weight / days) * 100
                 if epef >= 300:
-                    self.lbl_epef.config(text=f"{epef:.0f}", fg=CLR["profit"])
+                    self.lbl_epef.config(text=f"{epef:.0f}", foreground=CLR["profit"])
                 else:
-                    self.lbl_epef.config(text=f"{epef:.0f}", fg=CLR["loss"])
+                    self.lbl_epef.config(text=f"{epef:.0f}", foreground=CLR["loss"])
             else: 
-                self.lbl_epef.config(text="0", fg=CLR["text2"])
+                self.lbl_epef.config(text="0", foreground=CLR["text2"])
 
         net = total_rev - total_cost
         if hasattr(self, 'lbl_net'): 
             if net >= 0:
-                self.lbl_net.config(text=f"{fmt_num(net)} ريال", fg=CLR["profit"])
+                self.lbl_net.config(text=f"{fmt_num(net)} ريال", foreground=CLR["profit"])
             else:
-                self.lbl_net.config(text=f"{fmt_num(net)} ريال", fg=CLR["loss"])
+                self.lbl_net.config(text=f"{fmt_num(net)} ريال", foreground=CLR["loss"])
                 
         if not HAS_TTKB and hasattr(self, '_net_frame'): 
-            if net >= 0:
-                self._net_frame.config(bg=CLR["profit_bg"])
-            else:
-                self._net_frame.config(bg=CLR["loss_bg"])
+            try:
+                if net >= 0:
+                    self._net_frame.config(bg=CLR["profit_bg"])
+                else:
+                    self._net_frame.config(bg=CLR["loss_bg"])
+            except:
+                pass
             
         try: 
             v["share_val"].set(fmt_num(net * float(v["share_pct"].get()) / 100))
@@ -1338,23 +1345,41 @@ class WarehousesReportWindow(ToplevelBase):
         for i, s in enumerate(f_sales, 2):
             b_n = s["batch_num"] if s["batch_num"] else s["batch_id"]
             row = [s["wh_name"], b_n, s["customer"], s["qty"], s["price"], s["total_val"]]
+
             for c, v in enumerate(row, 1):
+
                 cell = ws2.cell(i, c, v)
+
                 cell.border = brd
+
                 cell.alignment = center
+
                 if c in [4,5,6]: 
+
                     if c == 5:
+
                         cell.number_format = '#,##0.00'
+
                     else:
+
                         cell.number_format = '#,##0'
 
+
+
         # ── الشيت 3: تفاصيل مبيعات السوق ──
+
         ws3 = wb.create_sheet("تفاصيل مبيعات السوق")
+
         ws3.sheet_view.rightToLeft = True
+
         m_sales = db.fetch_all("SELECT m.*, b.batch_num, w.name AS wh_name FROM market_sales m JOIN batches b ON m.batch_id=b.id JOIN warehouses w ON b.warehouse_id=w.id ORDER BY w.name, b.date_in")
+
         headers3 = ["العنبر", "رقم الدفعة", "مكتب التسويق", "الكمية المرسلة", "الوفيات", "المباع", "صافي الفاتورة", "رقم الفاتورة"]
+
         
+
         for c, h in enumerate(headers3, 1):
+
             cell = ws3.cell(1, c, h)
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = hdr_fill
@@ -1409,149 +1434,396 @@ class WarehousesReportWindow(ToplevelBase):
 class ExcelImporter:
     """
     يستورد ملفات Excel الخاصة بدفعة عنبر دواجن.
-    يبحث في الأوراق عن:
-      - كرت العنبر  → السجلات اليومية
-      - مبيعات العنبر → farm_sales
-      - ورقة التصفية → بيانات التكاليف والإيرادات
+    يستخرج اسم العنبر ورقم الدفعة من اسم الملف تلقائياً.
     """
-    DAILY_SHEET_KEYWORDS  = ['كرت', 'يومي', 'اجمالي', 'علف', 'نافق']
-    SALES_SHEET_KEYWORDS  = ['مبيعات', 'عميل', 'عملاء']
-    SUMMARY_SHEET_KEYWORDS= ['تصفية', 'ملخص', 'حسابات', 'اجمالي', 'تكاليف']
 
     def __init__(self, path):
         self.path = path
-        self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        self.filename = os.path.splitext(os.path.basename(path))[0].strip()
+        self.wh_name = self._extract_wh_name(self.filename)
+        self.batch_num = self.filename
+        # دعم XLSM (ملفات ماكرو) بالإضافة لـ XLSX
+        ext = os.path.splitext(path)[1].lower()
+        try:
+            if ext == '.xlsm':
+                self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True, keep_vba=True)
+            else:
+                self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        except Exception:
+            # fallback: محاولة ثانية بدون keep_vba
+            self.wb = openpyxl.load_workbook(path, data_only=True)
         self.result = {}
         self.errors = []
         self.daily_rows = []
         self.farm_sales = []
+        self.market_sales = []
 
-    def _sheet_score(self, name, keywords):
-        return sum(1 for kw in keywords if kw in name)
+    def _extract_wh_name(self, filename):
+        """يستخرج اسم العنبر من اسم الملف بشكل ذكي"""
+        # إزالة المسافات والحروف غير المرئية (مثل RLM)
+        import unicodedata
+        clean = ''.join(c for c in filename if unicodedata.category(c) not in ('Cf',))
+        clean = clean.strip()
+        # تقطيع عند كلمة "دفعة" -> ما قبلها هو اسم العنبر
+        for sep in ['دفعة', 'دورة', 'batch', 'Batch']:
+            if sep in clean:
+                part = clean.split(sep)[0].strip()
+                if part:
+                    return part
+        return clean[:40]
 
-    def _find_sheet(self, keywords):
+    def _find_sheet_by_keywords(self, keywords):
+        """يجد الورقة الأفضل تطابقاً للكلمات المفتاحية"""
         best, best_score = None, 0
         for name in self.wb.sheetnames:
-            score = self._sheet_score(name, keywords)
+            score = sum(1 for kw in keywords if kw in name)
             if score > best_score:
                 best, best_score = name, score
         return self.wb[best] if best else None
 
-    def _safe_float(self, v):
+    def _sf(self, v):
+        """\u062a\u062d\u0648\u064a\u0644 \u0622\u0645\u0646 \u0644\u0639\u062f\u062f \u062d\u0642\u064a\u0642\u064a"""
         try:
-            return float(str(v).replace(',', '')) if v not in (None, '') else 0.0
+            return float(str(v).replace(',', '').replace(' ', '')) if v not in (None, '', '#DIV/0!') else 0.0
         except:
             return 0.0
 
-    def _safe_int(self, v):
+    def _si(self, v):
+        """\u062a\u062d\u0648\u064a\u0644 \u0622\u0645\u0646 \u0644\u0639\u062f\u062f \u0635\u062d\u064a\u062d"""
         try:
-            return int(float(str(v).replace(',', ''))) if v not in (None, '') else 0
+            return int(float(str(v).replace(',', '').replace(' ', ''))) if v not in (None, '', '#DIV/0!') else 0
         except:
             return 0
 
-    def _parse_daily_sheet(self, ws):
+    # -------- 1. كرت العنبر (سجلات يومية) --------
+    def _parse_daily(self, ws):
         rows = list(ws.iter_rows(values_only=True))
-        # find header row: contains 'التاريخ' or 'العمر'
-        header_row = 0
+
+        def _is_date_row(row):
+            """يتحقق أن الصف يبدأ بتاريخ في أول 3 خلايا"""
+            for cell in row[:3]:
+                if cell is None:
+                    continue
+                # datetime.datetime مباشرة
+                if hasattr(cell, "year") and hasattr(cell, "month"):
+                    return True
+                # نص يشبه تاريخ
+                s = str(cell).strip()[:10]
+                try:
+                    datetime.strptime(s, "%Y-%m-%d")
+                    return True
+                except:
+                    pass
+            return False
+
+        # إيجاد سطر الرأس: العنوانات مثل التاريخ والوفيات
+        # يجب أن يكون الصف التالي صف بيانات تاريخ حقيقي
+        hdr = -1
         for i, row in enumerate(rows):
-            flat = [str(c) for c in row if c is not None]
-            if any('تاريخ' in c or 'عمر' in c or 'نافق' in c for c in flat):
-                header_row = i
-                break
+            flat = " ".join(str(c) for c in row if c is not None)
+            if "التاريخ" in flat and ("الوفيات" in flat or "النافق" in flat):
+                # تحقق: هل الصف التالي له تاريخ حقيقي؟
+                for j in range(i+1, min(i+4, len(rows))):
+                    if _is_date_row(rows[j]):
+                        hdr = i
+                        break
+                if hdr >= 0:
+                    break
+
+        if hdr < 0:
+            return  # لا يوجد رأس مناسب
+
+        # حدد مواضع الأعمدة من صف الرأس
+        col_date, col_age, col_dead, col_feed_daily = 0, 1, 3, 5
+        hdr_row = rows[hdr] if rows else ()
+        for ci, cell in enumerate(hdr_row):
+            cv = str(cell or "").strip()
+            if cv == "التاريخ" or (cv.startswith("تاريخ") and "عمر" not in cv):
+                col_date = ci
+            elif "العمر" in cv:
+                col_age = ci
+            elif cv == "الوفيات" and "اجمالي" not in cv:
+                col_dead = ci
+            elif cv == "نافق" and "اجمالي" not in cv:
+                col_dead = ci
+            elif "مستهلك" in cv:  # العلف المستهلك يومياً
+                col_feed_daily = ci
 
         daily = []
-        for row in rows[header_row+1:]:
-            date_val = row[0] if row else None
+        for row in rows[hdr + 1:]:
+            if not row or len(row) <= col_date:
+                continue
+            if not _is_date_row(row):
+                continue  # تخطى صفوف الإجماليات والعناوين
+
+            date_val = row[col_date] if len(row) > col_date else None
             if date_val is None:
                 continue
-            # date might be datetime or string
-            if hasattr(date_val, 'strftime'):
-                rec_date = date_val.strftime('%Y-%m-%d')
+
+            if hasattr(date_val, "strftime"):
+                rec_date = date_val.strftime("%Y-%m-%d")
             else:
-                try:
-                    rec_date = datetime.strptime(str(date_val).strip(), '%Y-%m-%d').strftime('%Y-%m-%d')
-                except:
+                parsed = None
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
+                    try:
+                        parsed = datetime.strptime(str(date_val).strip()[:10], fmt)
+                        break
+                    except:
+                        pass
+                if not parsed:
                     continue
+                rec_date = parsed.strftime("%Y-%m-%d")
 
-            day_num   = self._safe_int(row[1] if len(row) > 1 else 0)
-            dead      = self._safe_int(row[3] if len(row) > 3 else 0)  # col D = نافق
-            feed_kg   = self._safe_float(row[6] if len(row) > 6 else 0) # col G = علف يومي
+            day_num = self._si(row[col_age] if len(row) > col_age else 0)
+            dead    = self._si(row[col_dead] if len(row) > col_dead else 0)
+            feed_kg = self._sf(row[col_feed_daily] if len(row) > col_feed_daily else 0)
 
-            if rec_date:
-                daily.append({'rec_date': rec_date, 'day_num': day_num, 'dead_count': dead, 'feed_kg': feed_kg})
+            daily.append({"rec_date": rec_date, "day_num": day_num, "dead_count": dead, "feed_kg": feed_kg})
+
         self.daily_rows = daily
 
-    def _parse_sales_sheet(self, ws):
-        rows = list(ws.iter_rows(values_only=True))
-        header_row = 0
-        for i, row in enumerate(rows):
-            flat = [str(c) for c in row if c is not None]
-            if any('عدد' in c or 'اسم' in c or 'قيمة' in c for c in flat):
-                header_row = i
-                break
-        sales = []
-        for row in rows[header_row+1:]:
-            if not row or row[2] is None:
-                continue
-            customer = str(row[2] or '').strip()
-            qty   = self._safe_int(row[3] if len(row) > 3 else 0)
-            val   = self._safe_float(row[5] if len(row) > 5 else 0)
-            price = round(val / qty, 2) if qty > 0 else 0
-            if customer and qty > 0:
-                sales.append({'customer': customer, 'qty': qty, 'price': price, 'total_val': val})
-        self.farm_sales = sales
+    def _parse_farm_sales(self, ws):
+        """
+        يستخرج المبيعات من ورقة بيان المبيعات.
 
-    def _parse_summary_sheet(self, ws):
-        mapping = {
-            'الكتاكيت': 'chicks', 'عدد الكتاكيت': 'chicks',
-            'العلف': 'feed_val', 'قيمة العلف': 'feed_val',
-            'نقل علف': 'feed_trans', 'أجور نقل': 'feed_trans',
-            'النشارة': 'sawdust_val', 'نشارة': 'sawdust_val',
-            'الغاز': 'gas_val', 'غاز': 'gas_val',
-            'المياه': 'water_val', 'مياة': 'water_val', 'مياه': 'water_val',
-            'الكهرباء': 'light_val', 'كهرباء': 'light_val',
-            'العلاجات': 'drugs_val', 'ادوية': 'drugs_val', 'أدوية بيطرية': 'drugs_val',
-            'الرواتب': 'breeders_pay', 'اجور': 'breeders_pay',
-            'الإيجار': 'rent_val', 'ايجار': 'rent_val',
-            'الصيانة': 'wh_expenses', 'صيانة': 'wh_expenses',
-            'نظافة': 'wash_val', 'تغسيل': 'wash_val',
-            'محروقات': 'other_costs', 'قرطاسية': 'admin_val',
-            'نتيجة الدفعة': 'net_result',
-            'اجمالي المصاريف': 'total_cost', 'الجمالي المصاريف': 'total_cost',
-            'الجمالي اليردات': 'total_rev', 'اجمالي الايرادات': 'total_rev',
-            'عدد المبيعات': 'total_sold',
-            'الوفيات في العنبر': 'total_dead', 'وفيات العنبر': 'total_dead',
-        }
+        هيكل الورقة الثابت:
+          - صف 0: عنوان مدمج (يتجاوز)
+          - صف 1: رأس الأعمدة (يتجاوز)
+          - صف 2+: بيانات فعلية
+
+        تقسيم الأعمدة (ثابت):
+          مبيعات العنبر  — A-G  (0-6)
+            col 0: اسم العميل
+            col 1: العدد  (آجل)
+            col 2: السعر  (آجل)
+            col 3: إجمالي (آجل)
+            col 4: العدد  (نقداً)
+            col 5: السعر  (نقداً)
+            col 6: إجمالي (نقداً)
+          مبيعات السوق   — H-N  (7-13)
+            col 7:  اسم المكتب / السائق
+            col 8:  الكمية المرسلة
+            col 9:  الوفيات
+            col 10: المباع
+            col 11: صافي الفاتورة
+            col 12: رقم الفاتورة
+            col 13: التاريخ
+        """
+        rows = list(ws.iter_rows(values_only=True))
+        
+        # ── تحديد سطر بداية البيانات ──
+        # إذا كان الصف 1 يحتوي كلمات رأس (اسم / عدد) نبدأ من صف 2
+        # وإلا نبدأ من صف 0 مباشرة
+        data_start = 0
+        for i, row in enumerate(rows[:5]):
+            flat = " ".join(str(c) for c in row if c is not None)
+            if "اسم العميل" in flat or ("العدد" in flat and "السعر" in flat):
+                data_start = i + 1   # ابدأ بعد سطر الرأس
+                break
+        
+        # إذا وجدنا سطر رأس مدمج في الصف 0 و رأس حقيقي في الصف 1 → ابدأ من 2
+        if data_start == 1:
+            flat0 = " ".join(str(c) for c in rows[0] if c is not None)
+            if any(kw in flat0 for kw in ["بيان مبيعات", "عنبر", "الفترة"]):
+                data_start = 2   # تجاوز صف العنوان + صف الرأس
+        
+        farm_sales   = []
+        market_sales = []
+
+        # قائمة كلمات يجب تجاهلها
+        SKIP_WORDS = {"الاجمالي", "إجمالي", "اجمالي", "المجموع", "الاجماليات",
+                      "البيان", "بيان", "None", "", "0", "اسم العميل"}
+
+        for row in rows[data_start:]:
+            if not row or all(c is None for c in row):
+                continue
+            ncols = len(row)
+
+            # ─── مبيعات العنبر (cols 0-6) ───
+            cust = str(row[0] or "").strip()
+            if cust and cust not in SKIP_WORDS and "#" not in cust:
+                qty_ajl   = self._si(row[1] if ncols > 1 else 0)
+                price_ajl = self._sf(row[2] if ncols > 2 else 0)
+                total_ajl = self._sf(row[3] if ncols > 3 else 0)
+                qty_nqd   = self._si(row[4] if ncols > 4 else 0)
+                price_nqd = self._sf(row[5] if ncols > 5 else 0)
+                total_nqd = self._sf(row[6] if ncols > 6 else 0)
+
+                # احسب السعر إذا كان فارغاً
+                if not price_ajl and qty_ajl > 0 and total_ajl > 0:
+                    price_ajl = round(total_ajl / qty_ajl, 2)
+                if not price_nqd and qty_nqd > 0 and total_nqd > 0:
+                    price_nqd = round(total_nqd / qty_nqd, 2)
+
+                # مبيعات آجل (دين)
+                if qty_ajl > 0:
+                    farm_sales.append({
+                        "customer":  cust,
+                        "qty":       qty_ajl,
+                        "price":     price_ajl,
+                        "total_val": total_ajl or qty_ajl * price_ajl
+                    })
+
+                # مبيعات نقداً (إذا وجدت) — تُسجّل كسجل منفصل بنفس الاسم
+                if qty_nqd > 0:
+                    farm_sales.append({
+                        "customer":  cust + " (نقداً)",
+                        "qty":       qty_nqd,
+                        "price":     price_nqd,
+                        "total_val": total_nqd or qty_nqd * price_nqd
+                    })
+
+            # ─── مبيعات السوق (cols 7-13) — فقط إذا الورقة لها >7 أعمدة ───
+            if ncols > 7:
+                office = str(row[7] or "").strip()
+                if office and office not in SKIP_WORDS and "#" not in office:
+                    ms_qty  = self._si(row[8]  if ncols > 8  else 0)
+                    ms_dead = self._si(row[9]  if ncols > 9  else 0)
+                    ms_sold = self._si(row[10] if ncols > 10 else 0)
+                    ms_net  = self._sf(row[11] if ncols > 11 else 0)
+                    ms_inv  = str(row[12] or "").strip() if ncols > 12 else ""
+                    if ms_qty > 0 or ms_net > 0:
+                        market_sales.append({
+                            "office":    office,
+                            "qty_sent":  ms_qty,
+                            "deaths":    ms_dead,
+                            "qty_sold":  ms_sold or max(0, ms_qty - ms_dead),
+                            "net_val":   ms_net,
+                            "inv_num":   ms_inv
+                        })
+
+        self.farm_sales   = farm_sales
+        self.market_sales = market_sales
+
+    def _parse_summary(self, ws):
+        """
+        يستخرج بيانات التكاليف والإيرادات من ورقة التصفية.
+        الخريطة تطابق أسماء الحقول الفعلية في قاعدة البيانات.
+        """
+        # الخريطة: (قائمة الكلمات المفتاحية، اسم العمود في قاعدة البيانات)
+        mapping = [
+            # بيانات الكتاكيت
+            (['الكتاكيت', 'عدد الكتاكيت', 'طيور', 'عدد الطيور'],       'chicks'),
+            (['قيمة الكتاكيت', 'تكلفة الكتاكيت', 'إجمالي قيمة الكتاكيت'],  'chick_val'),
+            # العلف
+            (['قيمة العلف', 'تكلفة العلف', 'علف\u2014قيمة', 'علف قيمة'],    'feed_val'),
+            (['نقل علف', 'أجور نقل', 'بقشيش', 'أجور نقل و بقشيش'],      'feed_trans'),
+            (['علف\u2014كمية', 'علف كمية', 'عدد أكياس العلف'],               'feed_qty'),
+            # النشارة
+            (['نشارة\u2014قيمة', 'نشارة قيمة', 'قيمة النشارة', 'النشارة'],   'sawdust_val'),
+            (['نشارة\u2014كمية', 'كمية نشارة'],                               'sawdust_qty'),
+            # الغاز
+            (['غاز\u2014قيمة', 'غاز قيمة', 'قيمة الغاز', 'الغاز'],          'gas_val'),
+            (['غاز\u2014كمية', 'كمية غاز'],                                   'gas_qty'),
+            # مياه وكهرباء
+            (['مياه', 'مياة', 'قيمة الماء'],                              'water_val'),
+            (['كهرباء', 'الكهرباء', 'إضاءة'],                            'light_val'),
+            # علاجات
+            (['العلاجات', 'ادوية', 'أدوية بيطرية', 'علاج'],             'drugs_val'),
+            # أجور مربيين
+            (['رواتب', 'أجور مربيين'],                                   'breeders_pay'),
+            # مصاريف عنبر
+            (['صيانة مباني', 'صيانة و اصلاح', 'مصاريف العنبر'],         'wh_expenses'),
+            # مصاريف بيت
+            (['مصاريف بيت', 'مصاريف المنزل', 'مصاريف البيت'],           'house_exp'),
+            # قات مربيين
+            (['قات مربيين', 'قات المربيين'],                             'qat_pay'),
+            # إيجار
+            (['إيجار', 'ايجار'],                                         'rent_val'),
+            # مشرفين
+            (['مشرف عنبر'],                                              'sup_wh_pay'),
+            (['مشرف شركة'],                                              'sup_co_pay'),
+            (['مشرف بيع'],                                               'sup_sale_pay'),
+            # إدارة
+            (['إدارة وحسابات', 'قرطاسية', 'بريد و هاتف'],               'admin_val'),
+            # لقاحات
+            (['أجور لقاحات', 'لقاحات', 'تطعيم'],                        'vaccine_pay'),
+            # توصيل
+            (['توصيل خدمات', 'توصيل'],                                   'delivery_val'),
+            # حمالة وخلط
+            (['حمالة وخلط', 'خلط'],                                      'mixing_val'),
+            # نظافة وتغسيل
+            (['تغسيل عنبر', 'نظافة', 'تغسيل'],                          'wash_val'),
+            # محروقات
+            (['محروقات', 'مصاريف أخرى', 'أخرى'],                        'other_costs'),
+            # إجماليات
+            (['جمالي المصاريف', 'اجمالي المصاريف', 'إجمالي المصاريف'],  'total_cost'),
+            (['جمالي الايردات', 'اجمالي الايرادات', 'إجمالي الإيرادات'], 'total_rev'),
+            (['نتيجة الدفعة', 'صافي الربح', 'صافي النتيجة'],            'net_result'),
+            (['عدد المبيعات'],                                            'total_sold'),
+            (['وفيات في العنبر', 'وفيات العنبر'],                        'total_dead'),
+            (['ذبيل', 'إيرادات ذبيل'],                                   'offal_val'),
+        ]
         d = {}
         for row in ws.iter_rows(values_only=True):
-            label = str(row[0] or '').strip() if row else ''
-            value = row[2] if len(row) > 2 else None
-            if value is None and len(row) > 1:
-                value = row[1]
-            for key, db_col in mapping.items():
-                if key in label and value is not None:
-                    d[db_col] = self._safe_float(value)
+            # افحص كل خلية كأنها تسمية محتملة
+            for ci, cell_label in enumerate(row):
+                if cell_label is None:
+                    continue
+                label_str = str(cell_label).strip()
+                # ابحث عن أول رقم في نفس الصف بعد التسمية
+                val_candidate = None
+                for cell_val in row[ci+1:]:
+                    if cell_val is not None and str(cell_val) not in ('', '#DIV/0!', '#VALUE!', '#REF!'):
+                        try:
+                            val_candidate = float(str(cell_val).replace(',', '').replace(' ', ''))
+                            break
+                        except:
+                            pass  # نص آخر، استمر
+
+                for keywords, db_col in mapping:
+                    if any(kw in label_str for kw in keywords):
+                        if val_candidate is not None and db_col not in d:
+                            d[db_col] = val_candidate
+
         self.result = d
 
+
     def run(self):
-        # Parse daily records
-        ws_daily = self._find_sheet(self.DAILY_SHEET_KEYWORDS)
+        def _sheet_has_daily_data(ws):
+            """يتحقق أن الورقة تحتوي على بيانات يومية حقيقية"""
+            rows_checked = list(ws.iter_rows(values_only=True, max_row=15))
+            for i, row in enumerate(rows_checked):
+                flat = " ".join(str(c) for c in row if c is not None)
+                if "التاريخ" in flat and ("الوفيات" in flat or "النافق" in flat):
+                    # تحقق: هل الصف التالي يحتوي تاريخ datetime؟
+                    for j in range(i+1, min(i+4, len(rows_checked))):
+                        next_row = rows_checked[j]
+                        if next_row and next_row[0] is not None:
+                            if hasattr(next_row[0], "year"):
+                                return True
+            return False
+
+        # Step1: بحث بالكلمات المفتاحية في اسم الورقة
+        ws_daily = self._find_sheet_by_keywords(["كرت", "يومي", "نافق", "حصر"])
+        # Step2: fallback - أي ورقة تحتوي بيانات يومية حقيقية
+        if not ws_daily:
+            for name in self.wb.sheetnames:
+                if _sheet_has_daily_data(self.wb[name]):
+                    ws_daily = self.wb[name]
+                    break
         if ws_daily:
-            self._parse_daily_sheet(ws_daily)
+            self._parse_daily(ws_daily)
         else:
-            self.errors.append('لم يُعثر على ورقة السجلات اليومية (كرت العنبر)')
+            self.errors.append("لم يُعثر على ورقة كرت العنبر")
 
-        # Parse sales
-        ws_sales = self._find_sheet(self.SALES_SHEET_KEYWORDS)
+        # find sales sheet (تجنب الورقة اليومية)
+        ws_sales = self._find_sheet_by_keywords(["مبيعات", "بيع", "عميل", "عملاء", "بيان"])
+        if ws_sales and ws_daily and ws_sales.title == ws_daily.title:
+            ws_sales = None  # لا تستخدم نفس الورقة
         if ws_sales:
-            self._parse_sales_sheet(ws_sales)
+            self._parse_farm_sales(ws_sales)
 
-        # Parse summary
-        ws_sum = self._find_sheet(self.SUMMARY_SHEET_KEYWORDS)
+        # find costs/summary sheet
+        ws_sum = self._find_sheet_by_keywords(["تصفية", "حسابات", "تكاليف", "ملخص", "مالي", "اجمالي"])
+        if not ws_sum:
+            ws_sum = self.wb.worksheets[0] if self.wb.worksheets else None
         if ws_sum:
-            self._parse_summary_sheet(ws_sum)
+            self._parse_summary(ws_sum)
 
         return self
+
+
 
 
 # ════════════════════════════════════════════════════════════════
@@ -1612,6 +1884,7 @@ class MainWindow(WindowBase):
                 ("📈 لوحة القياس", self._open_dashboard, "success-outline", "عرض الرسوم البيانية للدفعة"),
                 ("🖨️ تصفية PDF", self._export_pdf, "info-outline", "تصدير التقرير النهائي كملف PDF"),
                 ("📥 استيراد Excel", self._import_excel, "warning-outline", "استيراد دفعة من ملف Excel"),
+                ("📂 استيراد مجلد", self._import_folder, "warning", "استيراد كافة ملفات الإكسل من مجلد واحد"),
                 ("💾 نسخ احتياطي", self._backup, "secondary-outline", "أخذ نسخة احتياطية من البيانات")
             ]
             
@@ -1662,6 +1935,7 @@ class MainWindow(WindowBase):
                 ("📈 لوحة القياس", self._open_dashboard, "#e2efda"),
                 ("🖨️ تصفية PDF", self._export_pdf, "#b3e5fc"),
                 ("📥 استيراد Excel", self._import_excel, "#fff2cc"),
+                ("📂 استيراد مجلد", self._import_folder, "#ffe699"),
                 ("💾 نسخ احتياطي", self._backup, "#f5f5f5")
             ]
             
@@ -1820,126 +2094,167 @@ class MainWindow(WindowBase):
         make_backup()
         messagebox.showinfo("نسخ احتياطي", "تم حفظ النسخة الاحتياطية بنجاح")
 
+    
     def _import_excel(self):
-        """استيراد دفعة عنبر من ملف Excel — يدعم التنسيق الخاص بالنظام"""
+        """استيراد دفعة عنبر من ملف Excel — اسم العنبر من اسم الملف"""
         if not HAS_OPENPYXL:
             return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.\nنفّذ: pip install openpyxl", parent=self)
 
-        # المسار الافتراضي المقترح
-        default_dir = r"C:\Users\user\Desktop"
         path = filedialog.askopenfilename(
             title="اختر ملف Excel للدفعة",
-            initialdir=default_dir,
-            filetypes=[("Excel Files", "*.xlsx *.xls"), ("All Files", "*.*")],
+            initialdir=r"C:\Users\user\Desktop",
+            filetypes=[
+                ("Excel Files", "*.xlsx *.xlsm *.xls"),
+                ("Excel Macro-Enabled", "*.xlsm"),
+                ("Excel Standard", "*.xlsx *.xls"),
+                ("All Files", "*.*")
+            ],
             parent=self
         )
         if not path:
             return
 
         try:
-            importer = ExcelImporter(path).run()
-        except Exception as e:
-            return messagebox.showerror("خطأ في قراءة الملف", str(e), parent=self)
-
-        # ── اختيار أو إنشاء العنبر ──
-        wh_names = [r["name"] for r in db.fetch_all("SELECT name FROM warehouses ORDER BY name")]
-        if not wh_names:
-            wh_name = tk.simpledialog.askstring("اسم العنبر", "أدخل اسم العنبر:", parent=self)
-            if not wh_name:
-                return
-        else:
-            dlg = tk.Toplevel(self)
-            dlg.title("تحديد العنبر")
-            dlg.geometry("300x150")
-            dlg.grab_set()
-            UILabel(dlg, text="اختر اسم العنبر:").pack(pady=10)
-            wh_var = tk.StringVar(value=wh_names[0])
-            ttk.Combobox(dlg, textvariable=wh_var, values=wh_names, state="readonly").pack(padx=20, fill="x")
-            UIButton(dlg, text="موافق", command=dlg.destroy).pack(pady=10)
-            dlg.wait_window()
-            wh_name = wh_var.get().strip()
-
-        if not wh_name:
-            return
-
-        # ── بيانات الدفعة الأساسية ──
-        d = importer.result
-        chicks = int(d.get('chicks', 0))
-        if chicks == 0:
-            # حساب من السجلات اليومية إن وجدت
-            if importer.daily_rows:
-                chicks_raw = tk.simpledialog.askinteger("كتاكيت", "عدد الكتاكيت المستلمة:", parent=self, minvalue=1)
-                if not chicks_raw:
-                    return
+            imp = ExcelImporter(path).run()
+            
+            # حساب عدد الكتاكيت إذا لم يكن موجوداً
+            chicks = int(imp.result.get('chicks', 0))
+            if chicks == 0:
+                from tkinter import simpledialog
+                chicks_raw = simpledialog.askinteger(
+                    "كتاكيت",
+                    f"لم يتم استخراج عدد الكتاكيت تلقائياً لملف: {imp.wh_name}.\nأدخل عدد الكتاكيت للدفعة:",
+                    parent=self, minvalue=1
+                )
+                if not chicks_raw: return
                 chicks = chicks_raw
+            
+            batch_id = self._save_import_to_db(imp, chicks)
+            
+            # ملخص فردي
+            self._load_batches()
+            d = imp.result
+            date_in  = imp.daily_rows[0]['rec_date'] if imp.daily_rows else date.today().isoformat()
+            date_out = imp.daily_rows[-1]['rec_date'] if imp.daily_rows else date.today().isoformat()
+            days_n   = max((datetime.strptime(date_out, '%Y-%m-%d') - datetime.strptime(date_in, '%Y-%m-%d')).days, 1)
+            total_dead = sum(r['dead_count'] for r in imp.daily_rows)
+            mort_rate  = round(total_dead / chicks * 100, 2) if chicks > 0 else 0
+            
+            summary = [
+                f"✅ تم استيراد الدفعة بنجاح!",
+                f"🏛️ العنبر ({imp.wh_name}) — رقم الدفعة: #{batch_id}",
+                f"🐥 الكتاكيت: {chicks:,}",
+                f"📅 المدة: {date_in} ← {date_out} ({days_n} يوم)",
+                f"💰 صافي النتيجة: {fmt_num(d.get('net_result', 0))} ريال",
+            ]
+            if imp.errors: summary.append("\n⚠️ " + ' | '.join(imp.errors))
+            messagebox.showinfo("تم الاستيراد", '\n'.join(summary), parent=self)
 
-        date_in  = importer.daily_rows[0]['rec_date'] if importer.daily_rows else date.today().isoformat()
-        date_out = importer.daily_rows[-1]['rec_date'] if importer.daily_rows else date.today().isoformat()
-        days_count = (datetime.strptime(date_out, '%Y-%m-%d') - datetime.strptime(date_in, '%Y-%m-%d')).days or 1
+        except Exception as e:
+            messagebox.showerror("خطأ في الاستيراد", str(e), parent=self)
 
-        total_dead   = sum(r['dead_count'] for r in importer.daily_rows)
-        mort_rate    = round(total_dead / chicks * 100, 2) if chicks > 0 else 0
-        f_cust_qty   = sum(s['qty'] for s in importer.farm_sales)
-        f_cust_val   = sum(s['total_val'] for s in importer.farm_sales)
-        total_cost   = d.get('total_cost', 0)
-        total_rev    = d.get('total_rev', 0) or f_cust_val
-        net_result   = d.get('net_result', total_rev - total_cost)
+    def _import_folder(self):
+        """استيراد كافة ملفات الإكسل من مجلد واحد"""
+        if not HAS_OPENPYXL:
+            return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.", parent=self)
 
-        # ── إضافة أو تحديث العنبر ──
-        wh = db.fetch_one("SELECT id FROM warehouses WHERE name=?", (wh_name,))
-        if not wh:
-            db.execute("INSERT INTO warehouses (name) VALUES (?)", (wh_name,))
-            wh = db.fetch_one("SELECT id FROM warehouses WHERE name=?", (wh_name,))
-        wh_id = wh['id']
+        target_dir = filedialog.askdirectory(title="اختر المجلد الذي يحتوي على ملفات الإكسل", parent=self)
+        if not target_dir: return
 
-        # ── إنشاء الدفعة ──
-        b_num = os.path.splitext(os.path.basename(path))[0][:30]
-        batch_id = db.execute("""
-            INSERT INTO batches (
-                warehouse_id, batch_num, date_in, date_out, days, chicks,
-                feed_qty, feed_val, feed_trans, sawdust_val, gas_val, water_val,
-                drugs_val, wh_expenses, breeders_pay, rent_val, light_val,
-                admin_val, wash_val, other_costs,
-                total_cost, cust_qty, cust_val, total_rev, total_sold,
-                total_dead, mort_rate, net_result, created_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
-        """, (
-            wh_id, b_num, date_in, date_out, days_count, chicks,
-            d.get('feed_qty', 0), d.get('feed_val', 0), d.get('feed_trans', 0),
-            d.get('sawdust_val', 0), d.get('gas_val', 0), d.get('water_val', 0),
-            d.get('drugs_val', 0), d.get('wh_expenses', 0), d.get('breeders_pay', 0),
-            d.get('rent_val', 0), d.get('light_val', 0), d.get('admin_val', 0),
-            d.get('wash_val', 0), d.get('other_costs', 0),
-            total_cost, int(f_cust_qty), f_cust_val, total_rev, int(f_cust_qty),
-            total_dead, mort_rate, net_result
-        ))
+        files = [f for f in os.listdir(target_dir) if f.lower().endswith(('.xlsx', '.xlsm'))]
+        if not files:
+            return messagebox.showinfo("تنبيه", "لا توجد ملفات إكسل في المجلد المختار.", parent=self)
 
-        # ── إدراج السجلات اليومية ──
-        for r in importer.daily_rows:
-            db.execute("""
-                INSERT OR IGNORE INTO daily_records (batch_id, rec_date, day_num, dead_count, feed_kg)
-                VALUES (?, ?, ?, ?, ?)
-            """, (batch_id, r['rec_date'], r['day_num'], r['dead_count'], r['feed_kg']))
+        success_count = 0
+        failed_files = []
 
-        # ── إدراج مبيعات العنبر ──
-        for s in importer.farm_sales:
-            db.execute("""
-                INSERT INTO farm_sales (batch_id, customer, qty, price, total_val)
-                VALUES (?, ?, ?, ?, ?)
-            """, (batch_id, s['customer'], s['qty'], s['price'], s['total_val']))
+        from tkinter import Toplevel
+        top = Toplevel(self)
+        top.title("جاري الاستيراد...")
+        top.geometry("400x150")
+        UILabel(top, text="جاري معالجة الملفات، يرجى الانتظار...", font=FT_HEADER, pady=10).pack()
+        lbl_status = UILabel(top, text="", foreground="blue", font=FT_SMALL)
+        lbl_status.pack(pady=5)
+        top.grab_set()
+        
+        for i, filename in enumerate(files):
+            lbl_status.config(text=f"معالجة ({i+1}/{len(files)}): {filename}")
+            top.update()
+            path = os.path.join(target_dir, filename)
+            try:
+                imp = ExcelImporter(path).run()
+                chicks = int(imp.result.get('chicks', 0))
+                if chicks == 0:
+                    failed_files.append(f"{filename}: لم يتم العثور على عدد الكتاكيت")
+                    continue
+                self._save_import_to_db(imp, chicks)
+                success_count += 1
+            except Exception as e:
+                failed_files.append(f"{filename}: {str(e)}")
 
+        top.destroy()
         self._load_batches()
-        msgs = [f"✅ تم استيراد الدفعة بنجاح!",
-                f"📦 العنبر: {wh_name}",
-                f"🐔 الكتاكيت: {chicks:,}",
-                f"📅 المدة: {date_in} ← {date_out} ({days_count} يوم)",
-                f"💀 إجمالي النافق: {total_dead:,} ({mort_rate}%)",
-                f"📊 السجلات اليومية المستوردة: {len(importer.daily_rows)}",
-                f"🛒 مبيعات العنبر: {len(importer.farm_sales)} سجل"]
-        if importer.errors:
-            msgs.append("\n⚠️ تحذيرات: " + ' | '.join(importer.errors))
-        messagebox.showinfo("تم الاستيراد", '\n'.join(msgs), parent=self)
+        report = [f"📊 ملخص عملية الاستيراد الجماعي:", f"✅ تم استيراد {success_count} ملف بنجاح."]
+        if failed_files:
+            report.append(f"\n❌ فشل استيراد {len(failed_files)} ملفات:")
+            report.extend(failed_files[:15])
+        messagebox.showinfo("تقرير الاستيراد الجماعي", "\n".join(report), parent=self)
 
+    def _save_import_to_db(self, imp, chicks):
+        d = imp.result
+        wh_name = imp.wh_name
+        batch_num_str = imp.filename
+        date_in  = imp.daily_rows[0]['rec_date'] if imp.daily_rows else date.today().isoformat()
+        date_out = imp.daily_rows[-1]['rec_date'] if imp.daily_rows else date.today().isoformat()
+        days_n   = max((datetime.strptime(date_out, '%Y-%m-%d') - datetime.strptime(date_in, '%Y-%m-%d')).days, 1)
+        total_dead = sum(r['dead_count'] for r in imp.daily_rows)
+        mort_rate  = round(total_dead / chicks * 100, 2) if chicks > 0 else 0
+        f_cust_qty = sum(s['qty'] for s in imp.farm_sales)
+        f_cust_val = sum(s['total_val'] for s in imp.farm_sales)
+        total_cost = d.get('total_cost', 0)
+        total_rev  = d.get('total_rev', 0) or f_cust_val
+        net_result = d.get('net_result', total_rev - total_cost)
+        total_sold = int(f_cust_qty) or int(d.get('total_sold', 0))
+
+        with db.get_conn() as conn:
+            wh = conn.execute("SELECT id FROM warehouses WHERE name=?", (wh_name,)).fetchone()
+            if not wh:
+                conn.execute("INSERT INTO warehouses (name) VALUES (?)", (wh_name,))
+                wh = conn.execute("SELECT id FROM warehouses WHERE name=?", (wh_name,)).fetchone()
+            wh_id = wh['id']
+            cur = conn.execute("""
+                INSERT INTO batches (
+                    warehouse_id, batch_num, date_in, date_out, days, chicks,
+                    chick_val, feed_qty, feed_val, feed_trans, sawdust_qty, sawdust_val,
+                    gas_qty, gas_val, water_val, light_val, drugs_val,
+                    wh_expenses, house_exp, breeders_pay, qat_pay, rent_val,
+                    sup_wh_pay, sup_co_pay, sup_sale_pay, admin_val, vaccine_pay,
+                    delivery_val, mixing_val, wash_val, other_costs,
+                    offal_val, total_cost, cust_qty, cust_val, total_rev, total_sold,
+                    total_dead, mort_rate, net_result, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+            """, (
+                wh_id, batch_num_str, date_in, date_out, days_n, chicks,
+                d.get('chick_val', 0), d.get('feed_qty', 0), d.get('feed_val', 0), d.get('feed_trans', 0),
+                d.get('sawdust_qty', 0), d.get('sawdust_val', 0), d.get('gas_qty', 0), d.get('gas_val', 0),
+                d.get('water_val', 0), d.get('light_val', 0), d.get('drugs_val', 0),
+                d.get('wh_expenses', 0), d.get('house_exp', 0), d.get('breeders_pay', 0), d.get('qat_pay', 0), d.get('rent_val', 0),
+                d.get('sup_wh_pay', 0), d.get('sup_co_pay', 0), d.get('sup_sale_pay', 0), d.get('admin_val', 0), d.get('vaccine_pay', 0),
+                d.get('delivery_val', 0), d.get('mixing_val', 0), d.get('wash_val', 0), d.get('other_costs', 0),
+                d.get('offal_val', 0), total_cost, int(f_cust_qty), f_cust_val, total_rev, total_sold,
+                total_dead, mort_rate, net_result
+            ))
+            batch_id = cur.lastrowid
+            for r in imp.daily_rows:
+                conn.execute("INSERT OR IGNORE INTO daily_records (batch_id, rec_date, day_num, dead_count, feed_kg) VALUES (?,?,?,?,?)",
+                    (batch_id, r['rec_date'], r['day_num'], r['dead_count'], r['feed_kg']))
+            for s in imp.farm_sales:
+                conn.execute("INSERT INTO farm_sales (batch_id, customer, qty, price, total_val) VALUES (?,?,?,?,?)",
+                    (batch_id, s['customer'], s['qty'], s['price'], s['total_val']))
+            for ms in imp.market_sales:
+                conn.execute("INSERT INTO market_sales (batch_id, office, qty_sent, deaths, qty_sold, net_val, inv_num) VALUES (?,?,?,?,?,?,?)",
+                    (batch_id, ms["office"], ms["qty_sent"], ms["deaths"], ms["qty_sold"], ms["net_val"], ms["inv_num"]))
+            return batch_id
     def _export_pdf(self):
         if not HAS_FPDF:
             messagebox.showerror("خطأ", "مكتبة fpdf غير مثبتة.\nنفّذ: pip install fpdf2", parent=self)
