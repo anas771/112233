@@ -336,9 +336,34 @@ class DBManager:
         self.execute_script("""
         DROP VIEW IF EXISTS v_batches; 
         CREATE VIEW v_batches AS 
-        SELECT b.*, w.name AS warehouse_name 
-        FROM batches b 
-        JOIN warehouses w ON b.warehouse_id=w.id;
+        WITH summary_data AS (
+            SELECT 
+                b.id,
+                COALESCE(daily.total_dead_calc, b.total_dead, 0) as dead_total,
+                COALESCE(daily.total_feed_kg, b.feed_qty * 1000, 0) as feed_total,
+                COALESCE(sales.total_weight_calc, (b.chicks - COALESCE(daily.total_dead_calc, b.total_dead, 0)) * 1.5) as weight_total,
+                COALESCE(sales.total_rev_calc, b.total_rev, 0) as rev_total,
+                COALESCE(sales.total_sold_calc, b.total_sold, 0) as sold_total
+            FROM batches b
+            LEFT JOIN (
+                SELECT batch_id, SUM(dead_count) as total_dead_calc, SUM(feed_kg) as total_feed_kg 
+                FROM daily_records GROUP BY batch_id
+            ) daily ON b.id = daily.batch_id
+            LEFT JOIN (
+                SELECT batch_id, SUM(qty) as total_sold_calc, SUM(total_val) as total_rev_calc, 
+                       SUM(qty * 1.5) as total_weight_calc
+                FROM farm_sales GROUP BY batch_id
+            ) sales ON b.id = sales.batch_id
+        )
+        SELECT b.*, 
+               w.name as warehouse_name,
+               (CAST(s.dead_total AS FLOAT) / NULLIF(b.chicks, 0) * 100) as mort_rate,
+               (s.feed_total / NULLIF(s.weight_total, 0)) as fcr,
+               ((100 - (CAST(s.dead_total AS FLOAT) / NULLIF(b.chicks, 0) * 100)) * (s.weight_total / NULLIF(s.sold_total, 0)) * 10) / (NULLIF(b.days, 0) * NULLIF((s.feed_total / NULLIF(s.weight_total, 0)), 0)) as epef,
+               COALESCE(b.net_result, (s.rev_total - COALESCE(b.total_cost, 0))) as net_result_dynamic
+        FROM batches b
+        JOIN warehouses w ON b.warehouse_id = w.id
+        JOIN summary_data s ON b.id = s.id;
         """)
 
 db = DBManager(DB_PATH)
@@ -1499,7 +1524,7 @@ class ReportsCenterWindow(ToplevelBase):
         
         if success:
             messagebox.showinfo("نجاح", msg)
-            if hasattr(self.master, '_refresh_kpi'): self.master._refresh_kpi()
+            if hasattr(self.master, '_load_batches'): self.master._load_batches()
         else:
             messagebox.showerror("خطأ", msg)
 
@@ -1525,14 +1550,14 @@ class ReportsCenterWindow(ToplevelBase):
         
         messagebox.showinfo("نتائج الاستيراد", msg)
         # تحديث الواجهة الرئيسية إذا لزم الأمر
-        if hasattr(self.master, '_refresh_kpi'): self.master._refresh_kpi()
+        if hasattr(self.master, '_load_batches'): self.master._load_batches()
 
     def _export_cumulative_report(self):
         path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile="التقرير_التراكمي_الشامل.xlsx")
         if not path: return
         
-        from report_exporter import ReportExporter
-        exporter = ReportExporter(self.master.db)
+        from core.report_exporter import ReportExporter
+        exporter = ReportExporter(self.master.db if hasattr(self.master, "db") else db)
         success, msg = exporter.export_all(path)
         if success:
             if messagebox.askyesno("نجاح", f"{msg}\nهل تريد فتح الملف الآن؟"):
@@ -1892,35 +1917,7 @@ class WarehousesReportWindow(ToplevelBase):
         except: 
             pass
 
-# ════════════════════════════════════════════════════════════════
-# مستورد ملفات Excel الذكي
-# ════════════════════════════════════════════════════════════════
-class ExcelImporter:
-    """
-    يستورد ملفات Excel الخاصة بدفعة عنبر دواجن.
-    يستخرج اسم العنبر ورقم الدفعة من اسم الملف تلقائياً.
-    """
-
-    def __init__(self, path):
-        self.path = path
-        self.filename = os.path.splitext(os.path.basename(path))[0].strip()
-        self.wh_name = self._extract_wh_name(self.filename)
-        self.batch_num = self.filename
-        # دعم XLSM (ملفات ماكرو) بالإضافة لـ XLSX
-        ext = os.path.splitext(path)[1].lower()
-        try:
-            if ext == '.xlsm':
-                self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True, keep_vba=True)
-            else:
-                self.wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        except Exception:
-            # fallback: محاولة ثانية بدون keep_vba
-            self.wb = openpyxl.load_workbook(path, data_only=True)
-        self.result = {}
-        self.errors = []
-        self.daily_rows = []
-        self.farm_sales = []
-        self.market_sales = []
+# (تم دمج منطق الاستيراد في core/batch_importer.py)
 
     def _extract_wh_name(self, filename):
         """يستخرج اسم العنبر من اسم الملف بشكل ذكي"""
@@ -2308,6 +2305,7 @@ class MainWindow(WindowBase):
         if not HAS_TTKB: 
             self.configure(bg=CLR["bg"])
         self.resizable(True, True)
+        self.db = db
         self.reports = ReportsManager(db, 
                                      font_path=os.path.join(BASE_DIR, "assets", "Amiri-Regular.ttf"),
                                      logo_path=os.path.join(BASE_DIR, "assets", "logo.png"))
@@ -2599,109 +2597,50 @@ class MainWindow(WindowBase):
 
     
     def _import_excel(self):
-        """استيراد دفعة عنبر من ملف Excel — اسم العنبر من اسم الملف"""
+        """استيراد دفعة عنبر من ملف Excel باستخدام المحرك الموحد"""
         if not HAS_OPENPYXL:
-            return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.\nنفّذ: pip install openpyxl", parent=self)
+            return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.", parent=self)
 
         path = filedialog.askopenfilename(
             title="اختر ملف Excel للدفعة",
-            initialdir=r"C:\Users\user\Desktop",
-            filetypes=[
-                ("Excel Files", "*.xlsx *.xlsm *.xls"),
-                ("Excel Macro-Enabled", "*.xlsm"),
-                ("Excel Standard", "*.xlsx *.xls"),
-                ("All Files", "*.*")
-            ],
+            filetypes=[("Excel Files", "*.xlsx *.xlsm *.xls"), ("All Files", "*.*")],
             parent=self
         )
-        if not path:
-            return
+        if not path: return
 
         try:
-            imp = ExcelImporter(path).run()
-            
-            # حساب عدد الكتاكيت إذا لم يكن موجوداً
-            chicks = int(imp.result.get('chicks', 0))
-            if chicks == 0:
-                from tkinter import simpledialog
-                chicks_raw = simpledialog.askinteger(
-                    "كتاكيت",
-                    f"لم يتم استخراج عدد الكتاكيت تلقائياً لملف: {imp.wh_name}.\nأدخل عدد الكتاكيت للدفعة:",
-                    parent=self, minvalue=1
-                )
-                if not chicks_raw: return
-                chicks = chicks_raw
-            
-            batch_id = self._save_import_to_db(imp, chicks)
-            
-            # ملخص فردي
-            self._load_batches()
-            d = imp.result
-            date_in  = imp.daily_rows[0]['rec_date'] if imp.daily_rows else date.today().isoformat()
-            date_out = imp.daily_rows[-1]['rec_date'] if imp.daily_rows else date.today().isoformat()
-            days_n   = max((datetime.strptime(date_out, '%Y-%m-%d') - datetime.strptime(date_in, '%Y-%m-%d')).days, 1)
-            total_dead = sum(r['dead_count'] for r in imp.daily_rows)
-            mort_rate  = round(total_dead / chicks * 100, 2) if chicks > 0 else 0
-            
-            summary = [
-                f"✅ تم استيراد الدفعة بنجاح!",
-                f"🏛️ العنبر ({imp.wh_name}) — رقم الدفعة: #{batch_id}",
-                f"🐥 الكتاكيت: {chicks:,}",
-                f"📅 المدة: {date_in} ← {date_out} ({days_n} يوم)",
-                f"💰 صافي النتيجة: {fmt_num(d.get('net_result', 0))} ريال",
-            ]
-            if imp.errors: summary.append("\n⚠️ " + ' | '.join(imp.errors))
-            messagebox.showinfo("تم الاستيراد", '\n'.join(summary), parent=self)
-
+            from core.batch_importer import BatchImporter
+            imp = BatchImporter(db)
+            success, msg = imp.import_file(path)
+            if success:
+                self._load_batches()
+                messagebox.showinfo("تم الاستيراد", msg, parent=self)
+            else:
+                messagebox.showerror("فشل الاستيراد", msg, parent=self)
         except Exception as e:
-            messagebox.showerror("خطأ في الاستيراد", str(e), parent=self)
+            messagebox.showerror("خطأ", str(e), parent=self)
 
     def _import_folder(self):
-        """استيراد كافة ملفات الإكسل من مجلد واحد"""
+        """استيراد كافة ملفات الإكسل من مجلد واحد باستخدام المحرك الموحد"""
         if not HAS_OPENPYXL:
             return messagebox.showerror("خطأ", "مكتبة openpyxl غير مثبتة.", parent=self)
 
         target_dir = filedialog.askdirectory(title="اختر المجلد الذي يحتوي على ملفات الإكسل", parent=self)
         if not target_dir: return
 
-        files = [f for f in os.listdir(target_dir) if f.lower().endswith(('.xlsx', '.xlsm'))]
-        if not files:
-            return messagebox.showinfo("تنبيه", "لا توجد ملفات إكسل في المجلد المختار.", parent=self)
-
-        success_count = 0
-        failed_files = []
-
-        from tkinter import Toplevel
-        top = Toplevel(self)
-        top.title("جاري الاستيراد...")
-        top.geometry("400x150")
-        UILabel(top, text="جاري معالجة الملفات، يرجى الانتظار...", font=FT_HEADER, pady=10).pack()
-        lbl_status = UILabel(top, text="", foreground="blue", font=FT_SMALL)
-        lbl_status.pack(pady=5)
-        top.grab_set()
+        from core.batch_importer import BatchImporter
+        imp = BatchImporter(db)
+        results = imp.import_folder(target_dir)
         
-        for i, filename in enumerate(files):
-            lbl_status.config(text=f"معالجة ({i+1}/{len(files)}): {filename}")
-            top.update()
-            path = os.path.join(target_dir, filename)
-            try:
-                imp = ExcelImporter(path).run()
-                chicks = int(imp.result.get('chicks', 0))
-                if chicks == 0:
-                    failed_files.append(f"{filename}: لم يتم العثور على عدد الكتاكيت")
-                    continue
-                self._save_import_to_db(imp, chicks)
-                success_count += 1
-            except Exception as e:
-                failed_files.append(f"{filename}: {str(e)}")
-
-        top.destroy()
         self._load_batches()
+        success_count = sum(1 for r in results if r['success'])
         report = [f"📊 ملخص عملية الاستيراد الجماعي:", f"✅ تم استيراد {success_count} ملف بنجاح."]
-        if failed_files:
-            report.append(f"\n❌ فشل استيراد {len(failed_files)} ملفات:")
-            report.extend(failed_files[:15])
-        messagebox.showinfo("تقرير الاستيراد الجماعي", "\n".join(report), parent=self)
+        if success_count < len(results):
+            report.append(f"\n❌ فشل استيراد {len(results) - success_count} ملفات:")
+            for r in results:
+                if not r['success']: report.append(f"- {r['file']}: {r['message']}")
+        
+        messagebox.showinfo("تقرير الاستيراد", "\n".join(report), parent=self)
 
     def _save_import_to_db(self, imp, chicks):
         d = imp.result

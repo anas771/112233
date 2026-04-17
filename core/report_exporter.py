@@ -78,29 +78,33 @@ class ReportExporter:
 
         # جلب البيانات
         query = """
-        SELECT b.*, w.name as warehouse_name 
-        FROM batches b 
-        JOIN warehouses w ON b.warehouse_id = w.id
-        ORDER BY b.date_in DESC
+        SELECT * FROM v_batches
+        ORDER BY date_in DESC
         """
         batches = self.db.fetch_all(query)
 
         row_num = 4
         for b in batches:
-            # تعبئة الأعمدة الـ 54
+            # حساب مؤشر الكفاءة EPEF برمجياً
+            mort_rate = b['mort_rate'] or 0
+            avg_weight = b['avg_weight'] or 0
+            days = b['days'] or 1
+            fcr = b['fcr'] or 1
+            epef = ((100 - mort_rate) * avg_weight * 10) / (days * fcr) if days and fcr else 0
+            
             data = [
                 b['warehouse_name'], b['date_in'], b['date_out'], b['days'],
-                b['chick_val'], b['chicks'], b['feed_val'], b['feed_qty'], b['feed_trans'],
-                0, b['sawdust_val'], b['sawdust_qty'], b['water_val'], 
-                (b['chick_val'] + b['feed_val'] + b['water_val'] + b['sawdust_val']), # إجمالي مباشرة
-                b['breeders_pay'], b['qat_pay'], b['sup_co_pay'], b['rent_val'], b['light_val'],
-                b['gas_val'], 0, b['drugs_val'], b['vaccine_pay'], b['wh_expenses'],
-                b['delivery_val'], 0, b['admin_val'], b['mixing_val'], b['wash_val'], b['other_costs'],
-                b['total_cost'], b['total_sold'], b['cust_val'], 0, 0,
-                0, 0, 0, 0, b['mkt_val'],
-                b['total_rev'], b['net_result'], b['share_val'], b['share_pct'],
-                b['chicks'], b['total_sold'], b['avg_weight'], b['mort_rate'],
-                b['fcr'], 350, b['avg_price'], (b['total_cost']/b['chicks'] if b['chicks'] else 0),
+                b['chick_val'] or 0, b['chicks'] or 0, b['feed_val'] or 0, b['feed_qty'] or 0, b['feed_trans'] or 0,
+                0, b['sawdust_val'] or 0, b['sawdust_qty'] or 0, b['water_val'] or 0, 
+                ((b['chick_val'] or 0) + (b['feed_val'] or 0) + (b['water_val'] or 0) + (b['sawdust_val'] or 0)), # إجمالي مباشرة
+                b['breeders_pay'] or 0, b['qat_pay'] or 0, b['sup_co_pay'] or 0, b['rent_val'] or 0, b['light_val'] or 0,
+                b['gas_val'] or 0, 0, b['drugs_val'] or 0, b['vaccine_pay'] or 0, b['wh_expenses'] or 0,
+                b['delivery_val'] or 0, 0, b['admin_val'] or 0, b['mixing_val'] or 0, b['wash_val'] or 0, b['other_costs'] or 0,
+                b['total_cost'] or 0, b['total_sold'] or 0, b['cust_val'] or 0, 0, 0,
+                0, 0, 0, 0, b['mkt_val'] or 0,
+                b['total_rev'] or 0, b['net_result'] or 0, b['share_val'] or 0, b['share_pct'] or 0,
+                b['chicks'] or 0, b['total_sold'] or 0, b['avg_weight'] or 0, b['mort_rate'] or 0,
+                b['fcr'] or 0, round(epef, 0), b['avg_price'] or 0, ((b['total_cost'] or 0)/(b['chicks'] or 1) if b['chicks'] else 0),
                 b['date_out'], b['days']
             ]
             
