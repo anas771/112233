@@ -13,7 +13,7 @@ import shutil
 import textwrap
 from datetime import datetime, date, timedelta
 import sys
-from reports_manager import ReportsManager
+from core.reports_manager import ReportsManager
 
 # ── دعم المظهر العصري (Classic Plus) ──────────────────────────
 try:
@@ -69,12 +69,16 @@ class UIButton(ttkb.Button if HAS_TTKB else tk.Button):
 
     def _on_enter(self, e):
         if HAS_TTKB:
-            curr = self.cget("bootstyle")
-            if "-outline" not in str(curr):
-                self.configure(bootstyle=f"{curr}-outline")
+            try:
+                curr = self.cget("bootstyle")
+                if "-outline" not in str(curr):
+                    self.configure(bootstyle=f"{curr}-outline")
+            except tk.TclError: pass
     def _on_leave(self, e):
         if HAS_TTKB:
-            self.configure(bootstyle=self.original_style)
+            try:
+                self.configure(bootstyle=self.original_style)
+            except tk.TclError: pass
 
 class UIEntry(ttkb.Entry if HAS_TTKB else tk.Entry):
     def __init__(self, master=None, **kwargs):
@@ -293,6 +297,16 @@ class DBManager:
             qty_sold INTEGER DEFAULT 0,
             net_val REAL DEFAULT 0, 
             inv_num TEXT
+        );
+        CREATE TABLE IF NOT EXISTS batch_cost_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER NOT NULL REFERENCES batches(id) ON DELETE CASCADE,
+            cost_name TEXT,
+            qty REAL DEFAULT 0,
+            company_val REAL DEFAULT 0,
+            supervisor_val REAL DEFAULT 0,
+            category TEXT,
+            notes TEXT DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_farm_sales_customer ON farm_sales(customer);
         CREATE INDEX IF NOT EXISTS idx_market_sales_office ON market_sales(office);
@@ -590,6 +604,8 @@ class BatchForm(ToplevelBase):
         self._vars = {}
         self._farm_sales = []
         self._market_sales = []
+        self._cost_records = []
+        self._syncing = False
         
         self._build_ui()
         if batch_id: 
@@ -686,11 +702,49 @@ class BatchForm(ToplevelBase):
             e = UIEntry(F, textvariable=v[key], width=16, font=FT_BODY, relief="solid", highlightthickness=1, highlightbackground=CLR["border"])
             e.grid(row=row, column=col+1, sticky="ew", padx=(0,20), pady=6)
             e.configure(justify="right")
+            
+            # منع التعديل اليدوي لبعض الحقول إذا كانت مرتبطة بالتكاليف التفصيلية (اختياري، حالياً نتركه للمزامنة)
             v[key].trace_add("write", lambda *a: self._auto_calc())
             col += 2
 
+        # ── قسم سجل التكاليف التفصيلي (الجديد) ──
+        sep = ttk.Separator(F, orient="horizontal")
+        sep.grid(row=row+1, column=0, columnspan=6, sticky="ew", pady=15)
+        
+        UILabel(F, text="📝 سجل بنود التكاليف التفصيلية (من الإكسيل أو مضاف يدوياً)", font=FT_HEADER, bg=CLR["bg"], fg=CLR["nav"]).grid(row=row+2, column=0, columnspan=6, sticky="w", pady=(0,10))
+        
+        inp_c = UIFrame(F, bg=CLR["bg"])
+        inp_c.grid(row=row+3, column=0, columnspan=6, sticky="ew")
+        
+        UILabel(inp_c, text="البند:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=0, padx=2)
+        self.v_cost_name = tk.StringVar()
+        UIEntry(inp_c, textvariable=self.v_cost_name, width=18, font=FT_BODY, relief="solid").grid(row=0,column=1, padx=2)
+        
+        UILabel(inp_c, text="الكمية:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=2, padx=2)
+        self.v_cost_qty = tk.StringVar()
+        UIEntry(inp_c, textvariable=self.v_cost_qty, width=8, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=3, padx=2)
+        
+        UILabel(inp_c, text="الشركة:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=4, padx=2)
+        self.v_cost_comp = tk.StringVar()
+        UIEntry(inp_c, textvariable=self.v_cost_comp, width=12, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=5, padx=2)
+        
+        UILabel(inp_c, text="المشرف:", font=FT_SMALL, bg=CLR["bg"]).grid(row=0,column=6, padx=2)
+        self.v_cost_sup = tk.StringVar()
+        UIEntry(inp_c, textvariable=self.v_cost_sup, width=12, font=FT_BODY, justify="right", relief="solid").grid(row=0,column=7, padx=2)
+        
+        UIButton(inp_c, text="➕ إضافة", font=FT_BODY, bg=CLR["nav"], fg="white", command=self._add_cost_record).grid(row=0,column=8, padx=10)
+        UIButton(inp_c, text="🗑 حذف", font=FT_BODY, bg=CLR["loss_bg"], fg=CLR["loss"], command=self._del_cost_record).grid(row=0,column=9, padx=2)
+
+        c_cols = ("م", "البند", "الكمية", "قيمة الشركة", "قيمة المشرف", "الإجمالي", "التصنيف")
+        self.tv_costs_detail = ttk.Treeview(F, columns=c_cols, show="headings", height=5)
+        c_widths = [30, 180, 80, 110, 110, 120, 100]
+        for c, w in zip(c_cols, c_widths):
+            self.tv_costs_detail.heading(c, text=c)
+            self.tv_costs_detail.column(c, width=w, anchor="center")
+        self.tv_costs_detail.grid(row=row+4, column=0, columnspan=6, sticky="ew", pady=10)
+
         frm_tc = UIFrame(F, bg=CLR["loss_bg"], pady=8, padx=15, bd=1, relief="solid")
-        frm_tc.grid(row=row+1, column=0, columnspan=6, sticky="ew", pady=(20,0))
+        frm_tc.grid(row=row+5, column=0, columnspan=6, sticky="ew", pady=(10,0))
         UILabel(frm_tc, text="إجمالي التكاليف والمصروفات:", font=FT_HEADER, bg=CLR["loss_bg"], fg=CLR["loss"]).pack(side="right")
         self.lbl_total_cost = UILabel(frm_tc, text="0", font=("Arial",16,"bold"), bg=CLR["loss_bg"], fg=CLR["loss"])
         self.lbl_total_cost.pack(side="right", padx=15)
@@ -935,6 +989,7 @@ class BatchForm(ToplevelBase):
             return 0.0
 
     def _auto_calc(self):
+        if self._syncing: return
         v = self._vars
         def parse_date(date_str):
             for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y"):
@@ -1041,16 +1096,21 @@ class BatchForm(ToplevelBase):
             pass
 
     def _load_batch(self):
-        row = db.fetch_one("SELECT * FROM v_batches WHERE id=?", (self.batch_id,))
-        if not row: 
-            return
-            
-        self.wh_var.set(row["warehouse_name"])
-        for k in [x for x in row.keys() if x in self._vars]:
-            if row[k] is not None:
-                self._vars[k].set(str(row[k]))
-            else:
-                self._vars[k].set("")
+        self._syncing = True
+        try:
+            row = db.fetch_one("SELECT * FROM v_batches WHERE id=?", (self.batch_id,))
+            if not row: 
+                return
+                
+            self.wh_var.set(row["warehouse_name"])
+            for k in [x for x in row.keys() if x in self._vars]:
+                if row[k] is not None:
+                    self._vars[k].set(str(row[k]))
+                else:
+                    self._vars[k].set("")
+        finally:
+            self._syncing = False
+            self._auto_calc()
             
         f_sales = db.fetch_all("SELECT * FROM farm_sales WHERE batch_id=?", (self.batch_id,))
         if f_sales: 
@@ -1063,16 +1123,77 @@ class BatchForm(ToplevelBase):
                 old_price = old_val / old_qty
             self._farm_sales.append({"customer": "مبيعات سابقة (مرحلة)", "qty": old_qty, "price": old_price, "total_val": old_val})
             
-        m_sales = db.fetch_all("SELECT * FROM market_sales WHERE batch_id=?", (self.batch_id,))
-        if m_sales: 
-            self._market_sales = [dict(r) for r in m_sales]
-        elif row["mkt_qty"] or row["mkt_val"]:
-            old_m_qty = row["mkt_qty"] or 0
-            old_m_val = row["mkt_val"] or 0
-            self._market_sales.append({"office": "مبيعات سابقة (مرحلة)", "qty_sent": old_m_qty, "deaths": 0, "qty_sold": old_m_qty, "net_val": old_m_val, "inv_num": ""})
-
         self._refresh_sales_views()
+        
+        c_recs = db.fetch_all("SELECT * FROM batch_cost_records WHERE batch_id=?", (self.batch_id,))
+        self._cost_records = [dict(r) for r in c_recs]
+        self._refresh_costs_view()
+        
         self._auto_calc()
+
+    def _refresh_costs_view(self):
+        for i in self.tv_costs_detail.get_children(): self.tv_costs_detail.delete(i)
+        for i, r in enumerate(self._cost_records, 1):
+            comp = float(r.get('company_val', 0) or 0)
+            sup = float(r.get('supervisor_val', 0) or 0)
+            tot = comp + sup
+            self.tv_costs_detail.insert("", "end", values=(i, r.get('cost_name'), r.get('qty'), fmt_num(comp), fmt_num(sup), fmt_num(tot), r.get('category')))
+
+    def _add_cost_record(self):
+        name = self.v_cost_name.get().strip()
+        if not name: return
+        try:
+            qty = float(self.v_cost_qty.get() or 0)
+            comp = float(self.v_cost_comp.get() or 0)
+            sup = float(self.v_cost_sup.get() or 0)
+        except: return messagebox.showerror("خطأ", "الكمية والمبالغ يجب أن تكون أرقاماً")
+        
+        cat = 'other'
+        if "علف" in name: cat = 'feed'
+        elif "غاز" in name: cat = 'gas'
+        elif "نشارة" in name: cat = 'sawdust'
+        elif "كتاكيت" in name or "صوص" in name: cat = 'chicks'
+        elif "علاج" in name or "أدوية" in name: cat = 'drugs'
+        
+        self._cost_records.append({'cost_name': name, 'qty': qty, 'company_val': comp, 'supervisor_val': sup, 'category': cat})
+        self.v_cost_name.set(""); self.v_cost_qty.set(""); self.v_cost_comp.set(""); self.v_cost_sup.set("")
+        self._sync_detailed_to_vars()
+        self._refresh_costs_view()
+        self._auto_calc()
+
+    def _del_cost_record(self):
+        sel = self.tv_costs_detail.selection()
+        if not sel: return
+        idx = self.tv_costs_detail.index(sel[0])
+        self._cost_records.pop(idx)
+        self._sync_detailed_to_vars()
+        self._refresh_costs_view()
+        self._auto_calc()
+
+    def _sync_detailed_to_vars(self):
+        self._syncing = True
+        try:
+            summary_maps = {
+                'feed': ('feed_val', 'feed_qty'),
+                'gas': ('gas_val', 'gas_qty'),
+                'sawdust': ('sawdust_val', 'sawdust_qty'),
+                'chicks': ('chick_val', None),
+                'drugs': ('drugs_val', None)
+            }
+            sums = {k: 0 for k in ['feed_val', 'feed_qty', 'gas_val', 'gas_qty', 'sawdust_val', 'sawdust_qty', 'chick_val', 'drugs_val']}
+            for r in self._cost_records:
+                cat = r.get('category')
+                val = float(r.get('company_val', 0) or 0) + float(r.get('supervisor_val', 0) or 0)
+                qty = float(r.get('qty', 0) or 0)
+                if cat in summary_maps:
+                    v_key, q_key = summary_maps[cat]
+                    if v_key: sums[v_key] += val
+                    if q_key: sums[q_key] += qty
+            for k, v in sums.items():
+                if k in self._vars: self._vars[k].set(str(v) if v > 0 else "")
+        finally:
+            self._syncing = False
+            self._auto_calc()
 
     def _collect(self):
         v = self._vars
@@ -1172,6 +1293,11 @@ class BatchForm(ToplevelBase):
         for ms in self._market_sales:
             db.execute("INSERT INTO market_sales (batch_id, office, qty_sent, deaths, qty_sold, net_val, inv_num) VALUES (?,?,?,?,?,?,?)", (b_id, ms["office"], ms["qty_sent"], ms["deaths"], ms["qty_sold"], ms["net_val"], ms["inv_num"]))
 
+        db.execute("DELETE FROM batch_cost_records WHERE batch_id=?", (b_id,))
+        for cr in self._cost_records:
+            db.execute("INSERT INTO batch_cost_records (batch_id, cost_name, qty, company_val, supervisor_val, category, notes) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                       (b_id, cr['cost_name'], cr['qty'], cr['company_val'], cr['supervisor_val'], cr.get('category','other'), cr.get('notes','')))
+
         messagebox.showinfo("تم", "تم حفظ الدفعة بنجاح", parent=self)
         if self.on_save: 
             self.on_save()
@@ -1203,16 +1329,19 @@ class ReportsCenterWindow(ToplevelBase):
         self.tab_cust = UIFrame(nb, padx=15, pady=15)
         self.tab_mkt  = UIFrame(nb, padx=15, pady=15)
         self.tab_batch = UIFrame(nb, padx=15, pady=15)
+        self.tab_excel = UIFrame(nb, padx=15, pady=15) # الميزة الجديدة
         self.tab_debts = UIFrame(nb, padx=15, pady=15)
 
         nb.add(self.tab_cust, text="👥 كشوفات العملاء")
         nb.add(self.tab_mkt,  text="🏢 كشوفات المكاتب")
         nb.add(self.tab_batch, text="📋 تقارير الدفعات")
+        nb.add(self.tab_excel, text="🚀 تكامل Excel الذكي") # التبويب الجديد
         nb.add(self.tab_debts, text="💰 تقرير المديونيات العامة")
 
         self._build_cust_tab()
         self._build_mkt_tab()
         self._build_batch_tab()
+        self._build_excel_tab() # بناء التبويب الجديد
         self._build_debts_tab()
 
     def _build_cust_tab(self):
@@ -1345,6 +1474,71 @@ class ReportsCenterWindow(ToplevelBase):
             self.reports.export_daily_records_pdf(b_id, path)
             messagebox.showinfo("تم", "تم تصدير السجلات اليومية")
             os.startfile(path)
+
+    def _build_excel_tab(self):
+        F = self.tab_excel
+        UILabel(F, text="تكامل Excel الذكي (استيراد وتصدير متطور)", font=FT_TITLE).pack(pady=10)
+        UILabel(F, text="يمكنك استيراد نماذج الدفعات الفردية (.xlsm) أو تصدير التقرير التراكمي الشامل.", font=FT_BODY, fg=CLR["text2"]).pack(pady=5)
+        
+        btn_f = UIFrame(F, pady=30)
+        btn_f.pack()
+        
+        UIButton(btn_f, text="📄 استيراد نموذج فردي واحد", bootstyle="info", command=self._import_single_xlsm).pack(pady=10, fill="x")
+        UIButton(btn_f, text="📂 استيراد مجلد النماذج الفردية", bootstyle="success", command=self._import_xlsm_folder).pack(pady=10, fill="x")
+        UIButton(btn_f, text="📤 تصدير التقرير التراكمي (54 عمود)", bootstyle="primary", command=self._export_cumulative_report).pack(pady=10, fill="x")
+        
+        UILabel(F, text="⚠️ تنبيه: الاستيراد سيعالج التكرار بإضافة أكواد (1001، 1002) لتمييز الدفعات.", font=FT_SMALL, fg="orange").pack(pady=20)
+
+    def _import_single_xlsm(self):
+        file_path = filedialog.askopenfilename(title="اختر ملف النموذج الفردي (.xlsm)", filetypes=[("Excel Files", "*.xlsm")])
+        if not file_path: return
+        
+        from core.batch_importer import BatchImporter
+        importer = BatchImporter(self.master.db)
+        success, msg = importer.import_file(file_path)
+        
+        if success:
+            messagebox.showinfo("نجاح", msg)
+            if hasattr(self.master, '_refresh_kpi'): self.master._refresh_kpi()
+        else:
+            messagebox.showerror("خطأ", msg)
+
+    def _import_xlsm_folder(self):
+        folder = filedialog.askdirectory(title="اختر المجلد الذي يحتوي على ملفات .xlsm")
+        if not folder: return
+        
+        from core.batch_importer import BatchImporter
+        # نستخدم db المعرف عالمياً في main.py أو الممرر للنافذة
+        importer = BatchImporter(self.master.db) 
+        results = importer.import_folder(folder)
+        
+        summary = ""
+        success_count = sum(1 for r in results if r['success'])
+        for r in results:
+            status = "✅" if r['success'] else "❌"
+            summary += f"{status} {r['file']}: {r['message']}\n"
+        
+        # عرض النتائج في نافذة منبثقة بسيطة
+        msg = f"تمت معالجة {len(results)} ملفات.\nنجاح: {success_count}\nفشل: {len(results)-success_count}\n\n{summary}"
+        # تقصير الرسالة إذا كانت طويلة جداً
+        if len(msg) > 1000: msg = msg[:1000] + "\n..."
+        
+        messagebox.showinfo("نتائج الاستيراد", msg)
+        # تحديث الواجهة الرئيسية إذا لزم الأمر
+        if hasattr(self.master, '_refresh_kpi'): self.master._refresh_kpi()
+
+    def _export_cumulative_report(self):
+        path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile="التقرير_التراكمي_الشامل.xlsx")
+        if not path: return
+        
+        from report_exporter import ReportExporter
+        exporter = ReportExporter(self.master.db)
+        success, msg = exporter.export_all(path)
+        if success:
+            if messagebox.askyesno("نجاح", f"{msg}\nهل تريد فتح الملف الآن؟"):
+                os.startfile(path)
+        else:
+            messagebox.showerror("خطأ", msg)
 
     def _build_debts_tab(self):
         F = self.tab_debts
@@ -2115,8 +2309,8 @@ class MainWindow(WindowBase):
             self.configure(bg=CLR["bg"])
         self.resizable(True, True)
         self.reports = ReportsManager(db, 
-                                     font_path=os.path.join(BASE_DIR, "Amiri-Regular.ttf"),
-                                     logo_path=os.path.join(BASE_DIR, "logo.png"))
+                                     font_path=os.path.join(BASE_DIR, "assets", "Amiri-Regular.ttf"),
+                                     logo_path=os.path.join(BASE_DIR, "assets", "logo.png"))
         self._build()
         self._load_batches()
         
@@ -2582,14 +2776,14 @@ class MainWindow(WindowBase):
         pdf = FPDF()
         pdf.add_page()
 
-        font_path = os.path.join(BASE_DIR, "Amiri-Regular.ttf")
+        font_path = os.path.join(BASE_DIR, "assets", "Amiri-Regular.ttf")
         if not os.path.exists(font_path):
             messagebox.showerror("خطأ", "ملف الخط Amiri-Regular.ttf غير موجود!", parent=self)
             return
             
         pdf.add_font('Arabic', '', font_path, uni=True)
 
-        logo_path = os.path.join(BASE_DIR, 'logo.png')
+        logo_path = os.path.join(BASE_DIR, "assets", "logo.png")
         if os.path.exists(logo_path):
             pdf.image(logo_path, x=10, y=8, w=30)
 
