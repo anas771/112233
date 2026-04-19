@@ -14,6 +14,14 @@ import textwrap
 from datetime import datetime, date, timedelta
 import sys
 from core.reports_manager import ReportsManager
+import io
+
+# ضبط ترميز الإخراج ليدعم العربي في التيرمنال
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    except:
+        pass
 
 # ── دعم المظهر العصري (Classic Plus) ──────────────────────────
 try:
@@ -394,6 +402,10 @@ def prepare_text(text):
     if HAS_ARABIC: 
         return get_display(arabic_reshaper.reshape(str(text)))
     return str(text)
+
+def tprint(text):
+    """طباعة آمنة للعربية في التيرمنال"""
+    print(prepare_text(text))
 
 def make_backup():
     if not os.path.exists(DB_PATH): 

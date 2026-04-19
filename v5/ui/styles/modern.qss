@@ -1,0 +1,168 @@
+/* 
+   Avian Vitality QSS for Doji Pro v5.0
+   Design Philosophy: Clean, organic growth, precision monitoring.
+*/
+
+QMainWindow {
+    background-color: #F8F9FA;
+}
+
+/* Side Menu */
+#sideMenu {
+    background-color: #044335; /* Deep Emerald Green */
+    min-width: 240px;
+    max-width: 240px;
+    border: none;
+}
+
+#sideMenu QLabel#logoLabel {
+    color: #FFFFFF;
+    font-size: 24px;
+    font-weight: 300;
+    margin-top: 20px;
+    margin-bottom: 40px;
+    font-family: "Segoe UI Light", "Segoe UI", "Arial";
+}
+
+#sideMenu QPushButton {
+    background-color: transparent;
+    color: #E2E8F0;
+    border: none;
+    padding: 18px 25px;
+    text-align: right;
+    font-size: 15px;
+    font-family: "Segoe UI Semilight", "Segoe UI", "Arial";
+    border-right: 4px solid transparent;
+}
+
+#sideMenu QPushButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+}
+
+#sideMenu QPushButton:checked {
+    background-color: rgba(245, 158, 11, 0.15); /* Orange tint */
+    color: #F59E0B; /* Vibrant Orange */
+    font-weight: bold;
+    border-right: 4px solid #F59E0B;
+}
+
+/* Header */
+#header {
+    background-color: #FFFFFF;
+    border-bottom: 1px solid #E2E8F0;
+}
+
+#header QLabel {
+    color: #044335;
+    font-size: 20px;
+    font-weight: 300;
+    font-family: "Segoe UI Light", "Segoe UI";
+}
+
+#header QLabel#userInfo {
+    color: #64748B;
+    font-size: 13px;
+}
+
+/* Content Area */
+#contentArea {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    margin: 15px;
+    border: 1px solid #F1F5F9;
+}
+
+/* KPI Cards */
+.KPICard {
+    background-color: #FFFFFF;
+    border: 1px solid #F1F5F9;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.KPILabel {
+    color: #64748B;
+    font-size: 13px;
+    font-family: "Segoe UI", "Arial";
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.KPIValue {
+    color: #044335;
+    font-size: 26px;
+    font-weight: 600;
+    font-family: "Segoe UI Variable Display Semibold", "Segoe UI Bold", "Arial";
+    margin-top: 5px;
+}
+
+/* Buttons */
+QPushButton#primaryBtn {
+    background-color: #059669; /* Emerald */
+    color: white;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    border: none;
+}
+
+QPushButton#primaryBtn:hover {
+    background-color: #047857;
+}
+
+QPushButton#successBtn {
+    background-color: #10B981;
+    color: white;
+    border-radius: 6px;
+    padding: 10px 20px;
+}
+
+QPushButton#dangerBtn {
+    background-color: #EF4444;
+    color: white;
+    border-radius: 6px;
+    padding: 10px 20px;
+}
+
+/* Table */
+QTableWidget {
+    background-color: transparent;
+    border: none;
+    gridline-color: #F1F5F9;
+    font-size: 14px;
+    alternate-background-color: #F8FAFC;
+}
+
+QHeaderView::section {
+    background-color: #F8FAFC;
+    color: #475569;
+    padding: 12px;
+    border: none;
+    border-bottom: 2px solid #E2E8F0;
+    font-weight: 600;
+}
+
+QScrollBar:vertical {
+    border: none;
+    background: #F1F5F9;
+    width: 8px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: #CBD5E1;
+    border-radius: 4px;
+}
+
+/* Forms */
+QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox, QTextEdit {
+    padding: 10px;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    background-color: #FFFFFF;
+}
+
+QLineEdit:focus, QComboBox:focus {
+    border: 2px solid #059669;
+}

@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 setlocal
 title Poultry System Launcher - المحرك الذكي لنظام الدواجن
 

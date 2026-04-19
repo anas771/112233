@@ -1,0 +1,23 @@
+{
+    "include": [
+        "v5",
+        "main.py",
+        "v5_app.py"
+    ],
+    "exclude": [
+        "legacy_src",
+        "env",
+        "backups"
+    ],
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "extraPaths": [
+                "."
+            ]
+        }
+    ],
+    "reportMissingImports": true,
+    "pythonVersion": "3.12",
+    "pythonPlatform": "Windows"
+}
