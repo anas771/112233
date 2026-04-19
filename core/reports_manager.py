@@ -382,3 +382,114 @@ class ReportsManager:
             stats['total_rev'] = stats['total_cost'] = stats['total_net'] = 0
             
         return stats
+    def export_nano_batch_pdf(self, batch_id, output_path):
+        """تصدير تقرير نانو الاحترافي (Nanobanana Style)"""
+        b_data = self.db.fetch_one("SELECT * FROM v_batches WHERE id=?", (batch_id,))
+        if not b_data: return False
+        b = dict(b_data)
+
+        # 1. إعداد الرسم البياني للنافق (أو أي مؤشر آخر)
+        import matplotlib.pyplot as plt
+        import io
+        
+        # جلب بيانات السجل اليومي للرسم البياني
+        daily_rows = self.db.fetch_all("SELECT day_num, dead_count, feed_kg FROM daily_records WHERE batch_id=? ORDER BY day_num", (batch_id,))
+        
+        plt.figure(figsize=(10, 4))
+        if daily_rows:
+            days = [r['day_num'] for r in daily_rows]
+            dead = [r['dead_count'] for r in daily_rows]
+            plt.plot(days, dead, color='#A80000', linewidth=2, marker='o', markersize=4, label='النافق اليومي')
+            plt.fill_between(days, dead, color='#FDE7E9', alpha=0.5)
+        
+        plt.title(self._prepare_arabic("منحنى النافق اليومي"), fontsize=12)
+        plt.xlabel(self._prepare_arabic("اليوم"), fontsize=10)
+        plt.ylabel(self._prepare_arabic("العدد"), fontsize=10)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        chart_buf = io.BytesIO()
+        plt.savefig(chart_buf, format='png', dpi=100, bbox_inches='tight')
+        chart_buf.seek(0)
+        plt.close()
+
+        # 2. إنشاء ملف PDF
+        pdf = FPDF()
+        pdf.add_page()
+        
+        if self.font_path and os.path.exists(self.font_path):
+            pdf.add_font('Arabic', '', self.font_path, uni=True)
+            pdf.set_font('Arabic', '', 14)
+        
+        # الهيدر الاحترافي (Nanobanana)
+        nano_header = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "nano_header.png")
+        if os.path.exists(nano_header):
+            pdf.image(nano_header, x=0, y=0, w=210)
+            pdf.ln(50) # مساحة تحت الهيدر
+        else:
+            pdf.ln(10)
+            
+        # العنوان
+        pdf.set_font('Arabic', '', 24)
+        pdf.set_text_color(0, 90, 158) # أزرق نانو
+        pdf.cell(0, 15, self._prepare_arabic("تقرير الكفاءة الإنتاجية"), ln=True, align='C')
+        pdf.ln(5)
+
+        # بطاقات المعلومات الأساسية (Cards)
+        pdf.set_font('Arabic', '', 11)
+        pdf.set_text_color(50, 49, 48)
+        
+        # خلفية الكروت
+        def draw_card(x, y, w, h, title, value, color_hex):
+            pdf.set_fill_color(int(color_hex[1:3], 16), int(color_hex[3:5], 16), int(color_hex[5:7], 16))
+            pdf.rect(x, y, w, h, 'F')
+            pdf.set_xy(x, y + 2)
+            pdf.set_font('Arabic', '', 10)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(w, 8, self._prepare_arabic(title), 0, 1, 'C')
+            pdf.set_font('Arabic', '', 16)
+            pdf.set_xy(x, y + 10)
+            pdf.cell(w, 12, value, 0, 1, 'C')
+
+        # رسم 4 كروت رئيسية
+        draw_card(10, 85, 45, 25, "صافي الربح", f"{b['net_result_dynamic']:,.0f}", "#107C10")
+        draw_card(60, 85, 45, 25, "معدل التحويل FCR", f"{b['fcr'] or 0:.2f}", "#005A9E")
+        draw_card(110, 85, 45, 25, "نسبة النافق", f"{b['mort_rate'] or 0:.1f}%", "#A80000")
+        draw_card(160, 85, 40, 25, "عدد الكتاكيت", f"{b['chicks']:,}", "#847545")
+
+        pdf.ln(35)
+        
+        # جدول التفاصيل المالية بتصميم أنيق
+        pdf.set_font('Arabic', '', 12)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_fill_color(243, 242, 241)
+        pdf.cell(0, 10, self._prepare_arabic("ملخص البيانات التشغيلية"), 0, 1, 'R')
+        
+        pdf.set_font('Arabic', '', 10)
+        details = [
+            ("اسم العنبر", b['warehouse_name']),
+            ("رقم الدفعة", b['batch_num'] or b['id']),
+            ("تاريخ الدخول", b['date_in']),
+            ("تاريخ الخروج", b['date_out']),
+            ("مدة الدورة", f"{b['days'] or 0} يوم"),
+            ("إجمالي التكاليف", f"{b['total_cost']:,.0f} ريال"),
+            ("إجمالي الإيرادات", f"{b['total_rev']:,.0f} ريال"),
+        ]
+        
+        for label, val in details:
+            pdf.set_fill_color(249, 249, 249)
+            pdf.cell(95, 8, str(val), 1, 0, 'C', True)
+            pdf.cell(95, 8, self._prepare_arabic(label), 1, 1, 'R', True)
+
+        pdf.ln(5)
+        
+        # إضافة الرسم البياني
+        pdf.image(chart_buf, x=10, y=180, w=190)
+        
+        # تذييل الصفحة
+        pdf.set_y(-30)
+        pdf.set_font('Arabic', '', 8)
+        pdf.set_text_color(128, 128, 128)
+        pdf.cell(0, 10, self._prepare_arabic("تم إنشاء هذا التقرير آلياً بواسطة منظومة دوجي برو - أسلوب نانو"), 0, 0, 'C')
+
+        pdf.output(output_path)
+        return True

@@ -686,6 +686,7 @@ class BatchForm(ToplevelBase):
         
         if self.batch_id: 
             UIButton(btn_frm, text="📅 السجلات اليومية", font=FT_BODY, bg=CLR["daily_bg"], fg=CLR["accent"], padx=20, pady=8, cursor="hand2", relief="flat", bd=1, command=self._open_daily).pack(side="right", padx=4)
+            UIButton(btn_frm, text="🚀 تقرير نانو", font=FT_BODY, bg=CLR["profit_bg"], fg=CLR["profit"], padx=20, pady=8, cursor="hand2", relief="flat", bd=1, command=self._export_nano).pack(side="right", padx=4)
             
         UIButton(btn_frm, text="إلغاء وإغلاق", font=FT_BODY, bg="#e0e0e0", fg=CLR["text"], padx=20, pady=8, cursor="hand2", relief="solid", bd=1, command=self.destroy).pack(side="left", padx=20)
 
@@ -695,6 +696,17 @@ class BatchForm(ToplevelBase):
         batch = db.fetch_one("SELECT * FROM v_batches WHERE id=?", (self.batch_id,))
         if batch: 
             DailyRecordsWindow(self, self.batch_id, dict(batch))
+
+    def _export_nano(self):
+        if not self.batch_id: return
+        path = filedialog.asksaveasfilename(defaultextension=".pdf", initialfile=f"تقرير_نانو_دفعة_{self.batch_id}.pdf", parent=self)
+        if path:
+            # استخدام ReportsManager المعرف عالمياً أو محلياً
+            from core.reports_manager import ReportsManager
+            rep = ReportsManager(db, font_path=os.path.join(BASE_DIR, "assets", "Amiri-Regular.ttf"))
+            rep.export_nano_batch_pdf(self.batch_id, path)
+            messagebox.showinfo("تم", "تم تصدير تقرير نانو الاحترافي", parent=self)
+            os.startfile(path)
 
     def _build_basic_tab(self, F):
         UILabel(F, text="اسم العنبر *", font=FT_SMALL, bg=CLR["bg"], fg=CLR["text2"]).grid(row=0, column=0, sticky="e", padx=(8,2), pady=10)
@@ -1490,7 +1502,18 @@ class ReportsCenterWindow(ToplevelBase):
         btn_f = UIFrame(F)
         btn_f.pack(fill="x", pady=10)
         UIButton(btn_f, text="📂 طباعة تصفية الدفعة النهائية", bootstyle="primary", command=self._export_full_batch).pack(side="right", padx=5)
+        UIButton(btn_f, text="🚀 تقرير نانو الاحترافي", bootstyle="success", command=self._export_nano_report).pack(side="right", padx=5)
         UIButton(btn_f, text="📅 طباعة السجلات اليومية", bootstyle="info", command=self._export_daily_logs).pack(side="right", padx=5)
+
+    def _export_nano_report(self):
+        sel = self.tv_batches.selection()
+        if not sel: return
+        b_id = sel[0]
+        path = filedialog.asksaveasfilename(defaultextension=".pdf", initialfile=f"تقرير_نانو_دفعة_{b_id}.pdf")
+        if path:
+            self.reports.export_nano_batch_pdf(b_id, path)
+            messagebox.showinfo("تم", "تم تصدير تقرير نانو الاحترافي")
+            os.startfile(path)
 
     def _export_full_batch(self):
         sel = self.tv_batches.selection()
