@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}الدفعات{% endblock %}
+{% block content %}
+<section class="panel">
+  <form method="get" class="filter-form">
+    <label>العنبر
+      <select name="warehouse_id">
+        <option value="">كل العنابر</option>
+        {% for warehouse in warehouses %}
+          <option value="{{ warehouse['id'] }}" {% if filters['warehouse_id']|int == warehouse['id'] %}selected{% endif %}>{{ warehouse['name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>السنة المالية
+      <select name="fiscal_year">
+        <option value="">كل السنوات</option>
+        {% for year in years %}
+          <option value="{{ year }}" {% if filters['fiscal_year']|int == year %}selected{% endif %}>{{ year }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">تصفية</button>
+    <a class="ghost-link" href="{{ url_for('batches') }}">إعادة ضبط</a>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>كل الدفعات</h2>
+    <a class="btn-primary" href="{{ url_for('new_batch') }}">إضافة دفعة</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+      <tr>
+        <th>#</th>
+        <th>العنبر</th>
+        <th>رقم الدفعة</th>
+        <th>الدخول</th>
+        <th>الخروج</th>
+        <th>كتاكيت</th>
+        <th>تكاليف</th>
+        <th>إيرادات</th>
+        <th>صافي</th>
+        <th>نفوق</th>
+        <th>السنة</th>
+        <th>إجراء</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for b in batches %}
+      <tr>
+        <td>{{ b["id"] }}</td>
+        <td>{{ b["warehouse_name"] }}</td>
+        <td>{{ b["batch_num"] or "-" }}</td>
+        <td>{{ b["date_in"] }}</td>
+        <td>{{ b["date_out"] }}</td>
+        <td>{{ b["chicks"]|num }}</td>
+        <td>{{ b["total_cost"]|num(2) }}</td>
+        <td>{{ b["total_rev"]|num(2) }}</td>
+        <td class="{{ 'profit' if b['net_result'] >= 0 else 'loss' }}">{{ b["net_result"]|num(2) }}</td>
+        <td>{{ b["mort_rate"]|num(2) }}%</td>
+        <td>{{ b["fiscal_year"] or (b["date_in"][:4] if b["date_in"] else "-") }}</td>
+        <td><a href="{{ url_for('batch_detail', batch_id=b['id']) }}">تفاصيل</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="12">لا يوجد دفعات.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

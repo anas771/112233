@@ -1,18 +1,35 @@
 /* 
    Avian Vitality QSS for Doji Pro v5.0
    Design Philosophy: Clean, organic growth, precision monitoring.
+   
+   COLOR PALETTE:
+   - Primary Text: #1A202C (Dark Gray)
+   - Secondary Text: #4A5568 (Medium Gray)
+   - Accent (Green): #044335
+   - Accent (Orange): #F59E0B
+   - Background: #F8F9FA
 */
+
+/* General Rule for all text to be dark by default */
+QWidget {
+    color: #1A202C;
+    font-family: "Segoe UI", "Arial", "Tahoma";
+}
 
 QMainWindow {
     background-color: #F8F9FA;
 }
 
-/* Side Menu */
+/* Side Menu - Keep text light here for contrast with dark green */
 #sideMenu {
     background-color: #044335; /* Deep Emerald Green */
     min-width: 240px;
     max-width: 240px;
     border: none;
+}
+
+#sideMenu QLabel, #sideMenu QPushButton {
+    color: #E2E8F0;
 }
 
 #sideMenu QLabel#logoLabel {
@@ -26,7 +43,6 @@ QMainWindow {
 
 #sideMenu QPushButton {
     background-color: transparent;
-    color: #E2E8F0;
     border: none;
     padding: 18px 25px;
     text-align: right;
@@ -54,7 +70,7 @@ QMainWindow {
 }
 
 #header QLabel {
-    color: #044335;
+    color: #044335; /* Dark Green for titles */
     font-size: 20px;
     font-weight: 300;
     font-family: "Segoe UI Light", "Segoe UI";
@@ -82,48 +98,33 @@ QMainWindow {
 }
 
 .KPILabel {
-    color: #64748B;
+    color: #64748B; /* Muted gray for labels */
     font-size: 13px;
-    font-family: "Segoe UI", "Arial";
     text-transform: uppercase;
     letter-spacing: 1px;
 }
 
 .KPIValue {
-    color: #044335;
+    color: #044335; /* Deep Green for values */
     font-size: 26px;
     font-weight: 600;
-    font-family: "Segoe UI Variable Display Semibold", "Segoe UI Bold", "Arial";
     margin-top: 5px;
 }
 
-/* Buttons */
-QPushButton#primaryBtn {
-    background-color: #059669; /* Emerald */
-    color: white;
+/* Buttons - Force white text for colored buttons */
+QPushButton#primaryBtn, QPushButton#successBtn, QPushButton#dangerBtn, QPushButton#premiumBtn {
+    color: #FFFFFF;
     border-radius: 6px;
     padding: 10px 20px;
     font-weight: 500;
     border: none;
 }
 
-QPushButton#primaryBtn:hover {
-    background-color: #047857;
-}
+QPushButton#primaryBtn { background-color: #059669; }
+QPushButton#primaryBtn:hover { background-color: #047857; }
 
-QPushButton#successBtn {
-    background-color: #10B981;
-    color: white;
-    border-radius: 6px;
-    padding: 10px 20px;
-}
-
-QPushButton#dangerBtn {
-    background-color: #EF4444;
-    color: white;
-    border-radius: 6px;
-    padding: 10px 20px;
-}
+QPushButton#successBtn { background-color: #10B981; }
+QPushButton#dangerBtn { background-color: #EF4444; }
 
 /* Table */
 QTableWidget {
@@ -132,6 +133,7 @@ QTableWidget {
     gridline-color: #F1F5F9;
     font-size: 14px;
     alternate-background-color: #F8FAFC;
+    color: #1A202C;
 }
 
 QHeaderView::section {
@@ -143,26 +145,28 @@ QHeaderView::section {
     font-weight: 600;
 }
 
-QScrollBar:vertical {
-    border: none;
-    background: #F1F5F9;
-    width: 8px;
-    border-radius: 4px;
-}
-
-QScrollBar::handle:vertical {
-    background: #CBD5E1;
-    border-radius: 4px;
-}
-
 /* Forms */
 QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox, QTextEdit {
     padding: 10px;
     border: 1px solid #E2E8F0;
     border-radius: 6px;
     background-color: #FFFFFF;
+    color: #1A202C;
 }
 
 QLineEdit:focus, QComboBox:focus {
     border: 2px solid #059669;
+}
+
+/* Premium Button (Banana/Nano Style) */
+QPushButton#premiumBtn {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F59E0B, stop:1 #D97706);
+    border-radius: 12px;
+    padding: 15px 25px;
+    font-size: 16px;
+}
+
+QPushButton#premiumBtn:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #D97706, stop:1 #B45309);
+    margin-top: 2px;
 }

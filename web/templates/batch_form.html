@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>{{ title }}</h2>
+  <form method="post" action="{{ action }}" class="grid-form">
+    <label>العنبر
+      <select name="warehouse_id" required>
+        <option value="">اختر العنبر</option>
+        {% for w in warehouses %}
+          <option value="{{ w['id'] }}" {% if (form.get('warehouse_id')|int) == w['id'] %}selected{% endif %}>{{ w['name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>رقم الدفعة
+      <input name="batch_num" value="{{ form.get('batch_num', '') }}">
+    </label>
+    <label>تاريخ الدخول
+      <input type="date" name="date_in" value="{{ form.get('date_in', '') }}" required>
+    </label>
+    <label>تاريخ الخروج
+      <input type="date" name="date_out" value="{{ form.get('date_out', '') }}" required>
+    </label>
+    <label>عدد الأيام
+      <input type="number" name="days" min="0" value="{{ form.get('days', 0) }}">
+    </label>
+    <label>عدد الكتاكيت
+      <input type="number" name="chicks" min="1" value="{{ form.get('chicks', 0) }}" required>
+    </label>
+    <label>سعر الكتكوت
+      <input type="number" step="0.01" name="chick_price" min="0" value="{{ form.get('chick_price', 0) }}">
+    </label>
+    <label class="full">ملاحظات
+      <textarea name="notes">{{ form.get('notes', '') }}</textarea>
+    </label>
+    <button type="submit">حفظ</button>
+  </form>
+</section>
+{% endblock %}

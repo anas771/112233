@@ -244,8 +244,7 @@ class BatchImporter:
             
             q_marks = ",".join(["?"] * len(vals))
             cols_str = ",".join(cols)
-            res = self.db.execute(f"INSERT INTO batches ({cols_str}) VALUES ({q_marks})", vals)
-            batch_id = res.lastrowid
+            batch_id = self.db.execute(f"INSERT INTO batches ({cols_str}) VALUES ({q_marks})", vals)
 
             # Insert sub-records
             for r in self.daily_rows:

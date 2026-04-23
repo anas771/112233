@@ -1,0 +1,489 @@
+﻿{% extends "base.html" %}
+{% block title %}مركز التقارير{% endblock %}
+{% block content %}
+<section class="panel reports-hero">
+  <div class="panel-head">
+    <h2>مركز التقارير والتحليلات</h2>
+    <div class="inline-actions">
+      <a class="btn-link" href="{{ url_for('dashboard') }}">العودة إلى لوحة التحكم</a>
+    </div>
+  </div>
+  <p class="muted-text">لوحة تقارير شاملة مع مؤشرات تشغيلية ومالية وخيارات تصدير Excel وPDF.</p>
+</section>
+
+<section class="panel">
+  <form method="get" class="filter-form">
+    <label>العنبر
+      <select name="warehouse_id">
+        <option value="">كل العنابر</option>
+        {% for warehouse in warehouses %}
+          <option value="{{ warehouse['id'] }}" {% if filters['warehouse_id']|int == warehouse['id'] %}selected{% endif %}>{{ warehouse['name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>السنة المالية
+      <select name="fiscal_year">
+        <option value="">كل السنوات</option>
+        {% for year in years %}
+          <option value="{{ year }}" {% if filters['fiscal_year']|int == year %}selected{% endif %}>{{ year }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">تطبيق الفلترة</button>
+    <a class="ghost-link" href="{{ url_for('reports') }}">إعادة ضبط</a>
+  </form>
+</section>
+
+<section class="summary-strip">
+  <article class="summary-card">
+    <h3>العنابر ضمن التقرير</h3>
+    <p>{{ report_summary["warehouses_count"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>عدد الدفعات</h3>
+    <p>{{ report_summary["shown_batches_count"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>الكتاكيت</h3>
+    <p>{{ report_summary["chicks_total"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>المباع</h3>
+    <p>{{ report_summary["total_sold"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>الوفيات</h3>
+    <p>{{ report_summary["total_dead"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>إجمالي التكاليف</h3>
+    <p>{{ report_summary["cost_total"]|num(2) }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>إجمالي الإيرادات</h3>
+    <p>{{ report_summary["revenue_total"]|num(2) }}</p>
+  </article>
+  <article class="summary-card {{ 'profit' if report_summary['net_total'] >= 0 else 'loss' }}">
+    <h3>صافي النتائج</h3>
+    <p>{{ report_summary["net_total"]|num(2) }}</p>
+  </article>
+</section>
+
+<section class="insight-grid">
+  <article class="insight-card">
+    <h4>هامش الربح</h4>
+    <p>{{ dashboard_insights["margin_pct"]|num(2) }}%</p>
+  </article>
+  <article class="insight-card">
+    <h4>متوسط FCR</h4>
+    <p>{{ dashboard_insights["avg_fcr"]|num(3) }}</p>
+  </article>
+  <article class="insight-card">
+    <h4>متوسط النفوق</h4>
+    <p>{{ dashboard_insights["avg_mortality"]|num(2) }}%</p>
+  </article>
+  <article class="insight-card">
+    <h4>معدل الوفيات الكلي</h4>
+    <p>{{ dashboard_insights["death_rate_pct"]|num(2) }}%</p>
+  </article>
+  <article class="insight-card">
+    <h4>نسبة البيع من الكتاكيت</h4>
+    <p>{{ dashboard_insights["sold_rate_pct"]|num(2) }}%</p>
+  </article>
+  <article class="insight-card">
+    <h4>مبيعات المزرعة</h4>
+    <p>{{ dashboard_insights["farm_sales_total"]|num(2) }}</p>
+  </article>
+  <article class="insight-card">
+    <h4>مبيعات السوق</h4>
+    <p>{{ dashboard_insights["market_sales_total"]|num(2) }}</p>
+  </article>
+  <article class="insight-card">
+    <h4>إيرادات إضافية</h4>
+    <p>{{ dashboard_insights["extra_revenues_total"]|num(2) }}</p>
+  </article>
+  <article class="insight-card">
+    <h4>أعلى بند تكلفة</h4>
+    <p>{{ dashboard_insights["top_cost_type_name"] }}</p>
+    <small class="muted-text">{{ dashboard_insights["top_cost_type_amount"]|num(2) }}</small>
+  </article>
+  <article class="insight-card">
+    <h4>أعلى بند إيراد إضافي</h4>
+    <p>{{ dashboard_insights["top_revenue_type_name"] }}</p>
+    <small class="muted-text">{{ dashboard_insights["top_revenue_type_amount"]|num(2) }}</small>
+  </article>
+  <article class="insight-card">
+    <h4>أفضل عنبر</h4>
+    <p>{{ dashboard_insights["top_warehouse_name"] }}</p>
+    <small class="muted-text">صافي: {{ dashboard_insights["top_warehouse_net"]|num(2) }}</small>
+  </article>
+  <article class="insight-card">
+    <h4>أفضل دفعة</h4>
+    <p>{{ dashboard_insights["best_batch_label"] }}</p>
+    <small class="muted-text">صافي: {{ dashboard_insights["best_batch_net"]|num(2) }}</small>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>خيارات التصدير</h2>
+    <span class="badge">Excel / PDF</span>
+  </div>
+  <div class="report-actions">
+    <a href="{{ url_for('export_reports_excel', report_type='warehouses', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير ملخص العنابر Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='annual', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير التحليل السنوي Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='batches', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير تقرير الدفعات Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='sales_types', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير أنواع المبيعات Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='cost_types', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير بنود التكاليف Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='revenue_types', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير بنود الإيرادات Excel</a>
+    <a href="{{ url_for('export_reports_excel', report_type='daily_summary', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year']) }}">تصدير ملخص السجل اليومي Excel</a>
+    <a href="{{ url_for('export_reports_pdf', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year'], include_dashboard=1) }}">تصدير PDF (مع الداش بورد)</a>
+    <a href="{{ url_for('export_reports_pdf', warehouse_id=filters['warehouse_id'], fiscal_year=filters['fiscal_year'], include_dashboard=0) }}">تصدير PDF (بدون الداش بورد)</a>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>الداش بورد الرسومي</h2>
+    <span class="badge">Charts</span>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>التكاليف مقابل الإيرادات حسب العنبر</h3>
+      <canvas id="warehouseFinancialChart" aria-label="مخطط مالي للعنابر" role="img"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>توزيع الإيرادات حسب المصدر</h3>
+      <canvas id="revenueSplitChart" aria-label="توزيع الإيرادات" role="img"></canvas>
+    </div>
+    <div class="chart-card chart-card-wide">
+      <h3>بنود التكاليف الأعلى</h3>
+      <canvas id="costTypesChart" aria-label="أعلى بنود التكاليف" role="img"></canvas>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>مبيعات المزرعة حسب النوع</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>نوع البيع</th>
+          <th>الكمية</th>
+          <th>القيمة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in sales_by_type_rows %}
+        <tr>
+          <td>{{ row["sale_type"] }}</td>
+          <td>{{ row["qty_total"]|num }}</td>
+          <td>{{ row["amount_total"]|num(2) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3">لا توجد مبيعات مزرعة ضمن الفلترة الحالية.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="summary-strip">
+  <article class="summary-card">
+    <h3>مرسل للسوق</h3>
+    <p>{{ market_summary_row["qty_sent_total"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>مباع في السوق</h3>
+    <p>{{ market_summary_row["qty_sold_total"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>وفيات السوق</h3>
+    <p>{{ market_summary_row["deaths_total"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>صافي مبيعات السوق</h3>
+    <p>{{ market_summary_row["net_val_total"]|num(2) }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>تفصيل بنود التكاليف</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>البند</th>
+          <th>الفئة</th>
+          <th>الكمية</th>
+          <th>القيمة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in cost_types_rows %}
+        <tr>
+          <td>{{ row["type_name"] }}</td>
+          <td>{{ row["category"] }}</td>
+          <td>{{ row["qty_total"]|num(2) }}</td>
+          <td>{{ row["amount_total"]|num(2) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">لا توجد بيانات تكاليف تفصيلية ضمن الفلترة الحالية.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>تفصيل بنود الإيرادات</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>البند</th>
+          <th>الفئة</th>
+          <th>الكمية</th>
+          <th>القيمة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in revenue_types_rows %}
+        <tr>
+          <td>{{ row["type_name"] }}</td>
+          <td>{{ row["category"] }}</td>
+          <td>{{ row["qty_total"]|num(2) }}</td>
+          <td>{{ row["amount_total"]|num(2) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">لا توجد بيانات إيرادات تفصيلية ضمن الفلترة الحالية.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="summary-strip">
+  <article class="summary-card">
+    <h3>سجلات يومية</h3>
+    <p>{{ daily_summary_row["entries_count"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>وفيات يومية</h3>
+    <p>{{ daily_summary_row["dead_total"]|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>علف مستهلك</h3>
+    <p>{{ daily_summary_row["feed_total"]|num(2) }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>مياه مستهلكة</h3>
+    <p>{{ daily_summary_row["water_total"]|num(2) }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>متوسط وفيات يومي</h3>
+    <p>{{ daily_summary_row["avg_daily_deaths"]|num(2) }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>ملخص العنابر</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>العنبر</th>
+          <th>عدد الدفعات</th>
+          <th>الكتاكيت</th>
+          <th>التكاليف</th>
+          <th>الإيرادات</th>
+          <th>الصافي</th>
+          <th>متوسط النفوق</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in warehouse_rows %}
+        <tr>
+          <td>{{ row["warehouse_name"] }}</td>
+          <td>{{ row["batches_count"]|num }}</td>
+          <td>{{ row["chicks_total"]|num }}</td>
+          <td>{{ row["cost_total"]|num(2) }}</td>
+          <td>{{ row["revenue_total"]|num(2) }}</td>
+          <td class="{{ 'profit' if row['net_total'] >= 0 else 'loss' }}">{{ row["net_total"]|num(2) }}</td>
+          <td>{{ row["avg_mortality"]|num(2) }}%</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">لا توجد بيانات مطابقة للفلاتر.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>التحليل السنوي</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>السنة المالية</th>
+          <th>عدد الدفعات</th>
+          <th>التكاليف</th>
+          <th>الإيرادات</th>
+          <th>الصافي</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in annual_rows %}
+        <tr>
+          <td>{{ row["fiscal_year"] }}</td>
+          <td>{{ row["batches_count"]|num }}</td>
+          <td>{{ row["cost_total"]|num(2) }}</td>
+          <td>{{ row["revenue_total"]|num(2) }}</td>
+          <td class="{{ 'profit' if row['net_total'] >= 0 else 'loss' }}">{{ row["net_total"]|num(2) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">لا توجد بيانات سنوية.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>أفضل 25 دفعة في العرض الحالي</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>رقم الدفعة</th>
+          <th>العنبر</th>
+          <th>الدخول</th>
+          <th>الخروج</th>
+          <th>النفوق</th>
+          <th>FCR</th>
+          <th>الصافي</th>
+          <th>الخيارات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches_rows %}
+        <tr>
+          <td>{{ batch["batch_num"] or batch["id"] }}</td>
+          <td>{{ batch["warehouse_name"] }}</td>
+          <td>{{ batch["date_in"] }}</td>
+          <td>{{ batch["date_out"] }}</td>
+          <td>{{ batch["mort_rate"]|num(2) }}%</td>
+          <td>{{ batch["fcr"]|num(3) }}</td>
+          <td class="{{ 'profit' if batch['net_result'] >= 0 else 'loss' }}">{{ batch["net_result"]|num(2) }}</td>
+          <td class="table-actions">
+            <a href="{{ url_for('batch_detail', batch_id=batch['id']) }}">تفاصيل</a>
+            <a href="{{ url_for('batch_costs', batch_id=batch['id']) }}">تكاليف</a>
+            <a href="{{ url_for('batch_revenues', batch_id=batch['id']) }}">إيرادات</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">لا توجد دفعات.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(() => {
+  const warehouseRows = {{ warehouse_rows | tojson }};
+  const costTypeRows = {{ cost_types_rows | tojson }};
+  const insights = {{ dashboard_insights | tojson }};
+
+  if (!window.Chart) return;
+
+  const warehouseLabels = warehouseRows.map((r) => r.warehouse_name || "غير محدد");
+  const warehouseCosts = warehouseRows.map((r) => Number(r.cost_total || 0));
+  const warehouseRevenues = warehouseRows.map((r) => Number(r.revenue_total || 0));
+
+  const warehouseCtx = document.getElementById("warehouseFinancialChart");
+  if (warehouseCtx && warehouseLabels.length) {
+    new Chart(warehouseCtx, {
+      type: "bar",
+      data: {
+        labels: warehouseLabels,
+        datasets: [
+          { label: "التكاليف", data: warehouseCosts, backgroundColor: "#d9534f" },
+          { label: "الإيرادات", data: warehouseRevenues, backgroundColor: "#198754" },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } },
+      },
+    });
+  }
+
+  const revenueCtx = document.getElementById("revenueSplitChart");
+  if (revenueCtx) {
+    new Chart(revenueCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["مبيعات المزرعة", "مبيعات السوق", "إيرادات إضافية"],
+        datasets: [{
+          data: [
+            Number(insights.farm_sales_total || 0),
+            Number(insights.market_sales_total || 0),
+            Number(insights.extra_revenues_total || 0),
+          ],
+          backgroundColor: ["#0d6efd", "#20c997", "#fd7e14"],
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } },
+      },
+    });
+  }
+
+  const costLabels = costTypeRows.slice(0, 8).map((r) => r.type_name || "غير محدد");
+  const costVals = costTypeRows.slice(0, 8).map((r) => Number(r.amount_total || 0));
+  const costCtx = document.getElementById("costTypesChart");
+  if (costCtx && costLabels.length) {
+    new Chart(costCtx, {
+      type: "line",
+      data: {
+        labels: costLabels,
+        datasets: [{
+          label: "قيمة التكلفة",
+          data: costVals,
+          borderColor: "#6f42c1",
+          backgroundColor: "rgba(111,66,193,0.15)",
+          fill: true,
+          tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: "bottom" } },
+      },
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}منظومة الدواجن - نسخة الويب{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>منظومة الدواجن</h1>
+      <p>نسخة الويب المرتبطة مباشرة بقاعدة البيانات</p>
+    </div>
+    <nav class="menu">
+      <a href="{{ url_for('dashboard') }}">لوحة التحكم</a>
+      <a href="{{ url_for('warehouses') }}">العنابر</a>
+      <a href="{{ url_for('batches') }}">الدفعات</a>
+      <a href="{{ url_for('reports') }}">التقارير</a>
+      <a href="{{ url_for('settings') }}">الإعدادات</a>
+      <a href="{{ url_for('new_batch') }}" class="btn-primary">دفعة جديدة</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class="flash-stack">
+          {% for cat, msg in messages %}
+            <article class="flash {{ cat }}">{{ msg }}</article>
+          {% endfor %}
+        </section>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

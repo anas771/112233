@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}التكاليف{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>التكاليف التفصيلية - دفعة {{ batch["batch_num"] or batch["id"] }}</h2>
+    <div class="inline-actions">
+      <a class="btn-link" href="{{ url_for('export_batch_costs_excel', batch_id=batch['id']) }}">تصدير Excel</a>
+      <a href="{{ url_for('batch_detail', batch_id=batch['id']) }}">رجوع</a>
+    </div>
+  </div>
+  <form method="post">
+    <div class="table-wrap">
+      <table>
+        <thead>
+        <tr>
+          <th>البند</th>
+          <th>الكمية</th>
+          <th>القيمة</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for t in types %}
+        {% set v = values.get(t['id']) %}
+        <tr>
+          <td>{{ t["name_ar"] }}</td>
+          <td>
+            <input type="number" step="0.01" min="0" name="qty_{{ t['id'] }}" value="{{ (v['qty'] if v else 0) }}">
+          </td>
+          <td>
+            <input type="number" step="0.01" min="0" name="amount_{{ t['id'] }}" value="{{ (v['amount'] if v else 0) }}">
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="submit">حفظ التكاليف</button>
+  </form>
+</section>
+{% endblock %}

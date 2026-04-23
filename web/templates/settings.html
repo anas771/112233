@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}الإعدادات{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>إعدادات النظام</h2>
+  </div>
+
+  <form method="post" class="stack-form">
+    <div class="grid-2">
+      <label>اسم الشركة
+        <input type="text" name="company_name" value="{{ values['company_name'] }}">
+      </label>
+      <label>العنوان
+        <input type="text" name="farm_address" value="{{ values['farm_address'] }}">
+      </label>
+      <label>رقم التواصل
+        <input type="text" name="contact_number" value="{{ values['contact_number'] }}">
+      </label>
+      <label>العملة
+        <input type="text" name="currency" value="{{ values['currency'] }}">
+      </label>
+      <label>المدير العام
+        <input type="text" name="manager_name" value="{{ values['manager_name'] }}">
+      </label>
+      <label>المدير المالي
+        <input type="text" name="finance_name" value="{{ values['finance_name'] }}">
+      </label>
+      <label>المراجع
+        <input type="text" name="auditor_name" value="{{ values['auditor_name'] }}">
+      </label>
+      <label>Telegram Bot Token
+        <input type="text" name="tg_token" value="{{ values['tg_token'] }}">
+      </label>
+      <label>Telegram Chat ID
+        <input type="text" name="tg_chat_id" value="{{ values['tg_chat_id'] }}">
+      </label>
+      <label>التفعيل التلقائي
+        <select name="tg_auto">
+          <option value="0" {% if values['tg_auto'] == '0' %}selected{% endif %}>موقّف</option>
+          <option value="1" {% if values['tg_auto'] == '1' %}selected{% endif %}>مفعّل</option>
+        </select>
+      </label>
+    </div>
+    <button type="submit">حفظ الإعدادات</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>النسخ الاحتياطي</h2>
+  </div>
+  <form method="post" action="{{ url_for('create_backup') }}">
+    <button type="submit">إنشاء نسخة احتياطية الآن</button>
+  </form>
+</section>
+{% endblock %}

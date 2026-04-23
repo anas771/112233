@@ -13,6 +13,7 @@ class Warehouse(Base):
     __tablename__ = 'warehouses'
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
+    capacity = Column(Integer, default=0)
     notes = Column(Text, default='')
     
     batches = relationship("Batch", back_populates="warehouse", cascade="all, delete-orphan")

@@ -2,9 +2,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 import os
 
-# المسار لقاعدة البيانات الجديدة
+# المسار لقاعدة البيانات الحالية للمشروع
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_URL = f"sqlite:///{os.path.join(os.path.dirname(BASE_DIR), 'poultry_v5.db')}"
+DB_URL = f"sqlite:///{os.path.join(os.path.dirname(BASE_DIR), 'poultry_data.db')}"
 
 engine = create_engine(DB_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
