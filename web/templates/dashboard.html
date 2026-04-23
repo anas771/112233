@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 {% block title %}لوحة التحكم{% endblock %}
 {% block content %}
+<section class="page-hero">
+  <h2>لوحة التشغيل الرئيسية</h2>
+  <p>متابعة مباشرة للأداء المالي والتشغيلي مع آخر الدفعات المسجلة.</p>
+</section>
+
 <section class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>فلاتر العرض</h2>
+      <p>تؤثر الفلاتر على المؤشرات وآخر الدفعات أدناه.</p>
+    </div>
+  </div>
   <form method="get" class="filter-form">
     <label>العنبر
       <select name="warehouse_id">
@@ -19,6 +30,9 @@
         {% endfor %}
       </select>
     </label>
+    <label class="filter-search">بحث سريع داخل جدول آخر الدفعات
+      <input type="text" placeholder="ابحث برقم الدفعة أو اسم العنبر" data-table-filter-input data-table-target="#latest-batches-table" data-table-counter="#latest-batches-counter">
+    </label>
     <button type="submit">تطبيق الفلترة</button>
     <a class="ghost-link" href="{{ url_for('dashboard') }}">إعادة ضبط</a>
   </form>
@@ -26,11 +40,11 @@
 
 <section class="cards">
   <article class="card">
-    <h3>العنابر</h3>
+    <h3>عدد العنابر</h3>
     <p>{{ stats["warehouses_count"]|num }}</p>
   </article>
   <article class="card">
-    <h3>الدفعات</h3>
+    <h3>عدد الدفعات</h3>
     <p>{{ stats["batches_count"]|num }}</p>
   </article>
   <article class="card">
@@ -42,11 +56,11 @@
     <p>{{ stats["total_rev"]|num(2) }}</p>
   </article>
   <article class="card {{ 'profit' if stats['total_net'] >= 0 else 'loss' }}">
-    <h3>الصافي</h3>
+    <h3>صافي النتائج</h3>
     <p>{{ stats["total_net"]|num(2) }}</p>
   </article>
   <article class="card">
-    <h3>إجمالي الكتاكيت</h3>
+    <h3>الكتاكيت</h3>
     <p>{{ stats["chicks_total"]|num }}</p>
   </article>
   <article class="card">
@@ -57,11 +71,17 @@
 
 <section class="panel">
   <div class="panel-head">
-    <h2>آخر الدفعات</h2>
-    <a href="{{ url_for('batches') }}">عرض الكل</a>
+    <div>
+      <h2>آخر الدفعات</h2>
+      <p class="click-hint">يمكن الضغط على أي صف لفتح تفاصيل الدفعة.</p>
+    </div>
+    <div class="inline-actions">
+      <span id="latest-batches-counter" class="badge">{{ latest_batches|length }} نتيجة</span>
+      <a class="btn-link" href="{{ url_for('batches') }}">عرض الكل</a>
+    </div>
   </div>
   <div class="table-wrap">
-    <table>
+    <table id="latest-batches-table">
       <thead>
         <tr>
           <th>#</th>
@@ -76,7 +96,7 @@
       </thead>
       <tbody>
       {% for b in latest_batches %}
-        <tr>
+        <tr class="row-link" data-href="{{ url_for('batch_detail', batch_id=b['id']) }}">
           <td>{{ b["id"] }}</td>
           <td>{{ b["warehouse_name"] }}</td>
           <td>{{ b["batch_num"] or "-" }}</td>
@@ -84,7 +104,7 @@
           <td>{{ b["date_out"] }}</td>
           <td>{{ b["chicks"]|num }}</td>
           <td class="{{ 'profit' if b['net_result'] >= 0 else 'loss' }}">{{ b["net_result"]|num(2) }}</td>
-          <td><a href="{{ url_for('batch_detail', batch_id=b['id']) }}">فتح</a></td>
+          <td><a class="btn-link" href="{{ url_for('batch_detail', batch_id=b['id']) }}">فتح</a></td>
         </tr>
       {% else %}
         <tr><td colspan="8">لا توجد بيانات بعد.</td></tr>

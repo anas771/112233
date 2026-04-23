@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}الاستيراد{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>استيراد ملفات poultry_v4</h2>
+  </div>
+  <form method="post" action="{{ url_for('imports_upload') }}" enctype="multipart/form-data" class="stack-form">
+    <div class="grid-2">
+      <label>بروفايل الربط
+        <select name="profile_id">
+          {% for p in profiles %}
+          <option value="{{ p['id'] }}" {% if p['is_default'] %}selected{% endif %}>{{ p['name'] }} ({{ p['source_key'] }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>وضع التنفيذ
+        <select name="batch_mode">
+          <option value="create">Create (إنشاء دفعة جديدة لكل ملف)</option>
+          <option value="update">Update (تحديث دفعة موجودة)</option>
+        </select>
+      </label>
+      <label>دفعة مستهدفة (اختياري لوضع Update)
+        <select name="target_batch_id">
+          <option value="">تحديد تلقائي من البيانات</option>
+          {% for b in batches %}
+          <option value="{{ b['id'] }}">#{{ b['id'] }} - {{ b['warehouse_name'] }} - {{ b['batch_num'] or '-' }} - {{ b['date_in'] }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>ملفات Excel
+        <input type="file" name="files" accept=".xlsm,.xlsx,.xls" multiple>
+      </label>
+      <label style="grid-column:1/-1;">أو مسار مجلد على نفس الجهاز
+        <input type="text" name="folder_path" placeholder="مثال: C:\Users\user\Desktop\...\ملف النماذج">
+      </label>
+    </div>
+    <button type="submit">بدء التحليل وبناء شاشة المراجعة</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h3>ملاحظات</h3>
+  </div>
+  <ul>
+    <li>القالب المدعوم في هذه المرحلة: `poultry_v4` فقط.</li>
+    <li>بعد التحليل ستظهر شاشة مراجعة لتصنيف البنود وربطها قبل الحفظ النهائي.</li>
+    <li>لو تم رفع نفس الملف سابقًا ستظهر لك رسالة تحذير تكرار قبل التنفيذ.</li>
+  </ul>
+</section>
+{% endblock %}

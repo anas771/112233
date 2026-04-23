@@ -1,7 +1,26 @@
 {% extends "base.html" %}
 {% block title %}الدفعات{% endblock %}
 {% block content %}
+{% set ns = namespace(total_cost=0.0, total_rev=0.0, total_net=0.0, avg_mortality=0.0, chicks=0, count=0) %}
+{% for b in batches %}
+  {% set ns.total_cost = ns.total_cost + (b["total_cost"] or 0) %}
+  {% set ns.total_rev = ns.total_rev + (b["total_rev"] or 0) %}
+  {% set ns.total_net = ns.total_net + (b["net_result"] or 0) %}
+  {% set ns.avg_mortality = ns.avg_mortality + (b["mort_rate"] or 0) %}
+  {% set ns.chicks = ns.chicks + (b["chicks"] or 0) %}
+  {% set ns.count = ns.count + 1 %}
+{% endfor %}
+
+<section class="page-hero">
+  <h2>إدارة الدفعات</h2>
+  <p>عرض وتشغيل جميع الدفعات مع ملخص مالي وتشغيلي مباشر.</p>
+</section>
+
 <section class="panel">
+  <div class="panel-head">
+    <h2>فلاتر الدفعات</h2>
+    <a class="btn-link" href="{{ url_for('new_batch') }}">إضافة دفعة</a>
+  </div>
   <form method="get" class="filter-form">
     <label>العنبر
       <select name="warehouse_id">
@@ -19,18 +38,50 @@
         {% endfor %}
       </select>
     </label>
+    <label class="filter-search">بحث سريع داخل جدول الدفعات
+      <input type="text" placeholder="ابحث برقم الدفعة أو العنبر أو السنة" data-table-filter-input data-table-target="#batches-table" data-table-counter="#batches-counter">
+    </label>
     <button type="submit">تصفية</button>
     <a class="ghost-link" href="{{ url_for('batches') }}">إعادة ضبط</a>
   </form>
 </section>
 
+<section class="summary-strip">
+  <article class="summary-card">
+    <h3>الدفعات الظاهرة</h3>
+    <p id="batches-counter">{{ ns.count|num }} نتيجة</p>
+  </article>
+  <article class="summary-card">
+    <h3>إجمالي الكتاكيت</h3>
+    <p>{{ ns.chicks|num }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>إجمالي التكاليف</h3>
+    <p>{{ ns.total_cost|num(2) }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>إجمالي الإيرادات</h3>
+    <p>{{ ns.total_rev|num(2) }}</p>
+  </article>
+  <article class="summary-card {{ 'profit' if ns.total_net >= 0 else 'loss' }}">
+    <h3>صافي النتائج</h3>
+    <p>{{ ns.total_net|num(2) }}</p>
+  </article>
+  <article class="summary-card">
+    <h3>متوسط النفوق</h3>
+    <p>{{ ((ns.avg_mortality / ns.count) if ns.count else 0)|num(2) }}%</p>
+  </article>
+</section>
+
 <section class="panel">
   <div class="panel-head">
-    <h2>كل الدفعات</h2>
-    <a class="btn-primary" href="{{ url_for('new_batch') }}">إضافة دفعة</a>
+    <div>
+      <h2>كل الدفعات</h2>
+      <p class="click-hint">الضغط على الصف يفتح تفاصيل الدفعة مباشرة.</p>
+    </div>
   </div>
   <div class="table-wrap">
-    <table>
+    <table id="batches-table">
       <thead>
       <tr>
         <th>#</th>
@@ -49,7 +100,7 @@
       </thead>
       <tbody>
       {% for b in batches %}
-      <tr>
+      <tr class="row-link" data-href="{{ url_for('batch_detail', batch_id=b['id']) }}">
         <td>{{ b["id"] }}</td>
         <td>{{ b["warehouse_name"] }}</td>
         <td>{{ b["batch_num"] or "-" }}</td>
@@ -61,7 +112,7 @@
         <td class="{{ 'profit' if b['net_result'] >= 0 else 'loss' }}">{{ b["net_result"]|num(2) }}</td>
         <td>{{ b["mort_rate"]|num(2) }}%</td>
         <td>{{ b["fiscal_year"] or (b["date_in"][:4] if b["date_in"] else "-") }}</td>
-        <td><a href="{{ url_for('batch_detail', batch_id=b['id']) }}">تفاصيل</a></td>
+        <td><a class="btn-link" href="{{ url_for('batch_detail', batch_id=b['id']) }}">تفاصيل</a></td>
       </tr>
       {% else %}
       <tr><td colspan="12">لا يوجد دفعات.</td></tr>

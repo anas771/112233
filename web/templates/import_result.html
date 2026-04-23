@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}نتيجة الاستيراد{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>تقرير الاستيراد - Run #{{ run['id'] }}</h2>
+  </div>
+  <p>الحالة: {{ run['status'] }} | البروفايل: {{ run['profile_name'] or '-' }} | وقت الاعتماد: {{ run['committed_at'] or '-' }}</p>
+  {% if report %}
+  <div class="stats-grid">
+    <article><h4>إجمالي الملفات</h4><p>{{ report.get('total_files', 0) }}</p></article>
+    <article><h4>ملفات ناجحة</h4><p>{{ report.get('committed_files', 0) }}</p></article>
+    <article><h4>ملفات فاشلة</h4><p>{{ report.get('failed_files', 0) }}</p></article>
+    <article><h4>دفعات متأثرة</h4><p>{{ report.get('touched_batches', [])|length }}</p></article>
+    <article><h4>صفوف متكررة تم تجاوزها</h4><p>{{ report.get('skipped_duplicates', 0) }}</p></article>
+    <article><h4>أنواع جديدة</h4><p>{{ report.get('created_types', [])|length }}</p></article>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h3>تفاصيل الملفات</h3>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>الملف</th>
+          <th>الحالة</th>
+          <th>الدفعة</th>
+          <th>السبب</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in run_files %}
+        <tr>
+          <td>{{ f['file_name'] }}</td>
+          <td>{{ f['status'] }}</td>
+          <td>{{ f['target_batch_id'] or '-' }}</td>
+          <td>{{ f['reason'] or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if report and report.get('created_types') %}
+<section class="panel">
+  <div class="panel-head">
+    <h3>أنواع تم إنشاؤها تلقائيًا</h3>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>النوع</th>
+          <th>الكود</th>
+          <th>الاسم</th>
+          <th>الفئة</th>
+          <th>الوحدة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in report.get('created_types', []) %}
+        <tr>
+          <td>{{ t.get('kind') }}</td>
+          <td>{{ t.get('code') }}</td>
+          <td>{{ t.get('name_ar') }}</td>
+          <td>{{ t.get('category') }}</td>
+          <td>{{ t.get('unit') or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if report and report.get('warnings') %}
+<section class="panel">
+  <div class="panel-head">
+    <h3>تحذيرات</h3>
+  </div>
+  <ul>
+    {% for w in report.get('warnings', []) %}
+    <li>{{ w }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="inline-actions">
+    <a class="btn-link" href="{{ url_for('imports_home') }}">استيراد جديد</a>
+    <a class="btn-link" href="{{ url_for('imports_run_review', run_id=run['id']) }}">العودة للمراجعة</a>
+  </div>
+</section>
+{% endblock %}

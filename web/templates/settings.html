@@ -41,6 +41,43 @@
           <option value="1" {% if values['tg_auto'] == '1' %}selected{% endif %}>مفعّل</option>
         </select>
       </label>
+      <label>نوع الخط في الواجهة
+        <select name="ui_font_family">
+          <option value="system" {% if values['ui_font_family'] == 'system' %}selected{% endif %}>واضح (Segoe UI)</option>
+          <option value="amiri" {% if values['ui_font_family'] == 'amiri' %}selected{% endif %}>تقليدي (Amiri)</option>
+        </select>
+      </label>
+      <label>حجم الخط
+        <select name="ui_font_scale">
+          <option value="95" {% if values['ui_font_scale'] == '95' %}selected{% endif %}>صغير</option>
+          <option value="100" {% if values['ui_font_scale'] == '100' %}selected{% endif %}>متوسط</option>
+          <option value="110" {% if values['ui_font_scale'] == '110' %}selected{% endif %}>كبير</option>
+          <option value="120" {% if values['ui_font_scale'] == '120' %}selected{% endif %}>أكبر</option>
+          <option value="130" {% if values['ui_font_scale'] == '130' %}selected{% endif %}>كبير جداً</option>
+        </select>
+      </label>
+      <label>تباعد الأسطر
+        <select name="ui_line_height">
+          <option value="1.45" {% if values['ui_line_height'] == '1.45' %}selected{% endif %}>مضغوط</option>
+          <option value="1.55" {% if values['ui_line_height'] == '1.55' %}selected{% endif %}>متوازن</option>
+          <option value="1.65" {% if values['ui_line_height'] == '1.65' %}selected{% endif %}>مريح</option>
+          <option value="1.80" {% if values['ui_line_height'] == '1.80' %}selected{% endif %}>مريح جداً</option>
+        </select>
+      </label>
+      <label>كثافة العناصر
+        <select name="ui_density">
+          <option value="compact" {% if values['ui_density'] == 'compact' %}selected{% endif %}>مضغوط</option>
+          <option value="balanced" {% if values['ui_density'] == 'balanced' %}selected{% endif %}>متوازن</option>
+          <option value="comfortable" {% if values['ui_density'] == 'comfortable' %}selected{% endif %}>مريح</option>
+        </select>
+      </label>
+      <label>قوة الفواصل بين البيانات
+        <select name="ui_separator_strength">
+          <option value="light" {% if values['ui_separator_strength'] == 'light' %}selected{% endif %}>خفيفة</option>
+          <option value="normal" {% if values['ui_separator_strength'] == 'normal' %}selected{% endif %}>متوسطة</option>
+          <option value="strong" {% if values['ui_separator_strength'] == 'strong' %}selected{% endif %}>قوية</option>
+        </select>
+      </label>
     </div>
     <button type="submit">حفظ الإعدادات</button>
   </form>

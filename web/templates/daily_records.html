@@ -1,38 +1,123 @@
 {% extends "base.html" %}
 {% block title %}السجلات اليومية{% endblock %}
 {% block content %}
+<section class="page-hero">
+  <h2>السجلات اليومية للدفعة {{ batch["batch_num"] or batch["id"] }}</h2>
+  <p>تسجيل البيانات اليومية والعلاجات مع تحليل المخاطر من نفس الشاشة.</p>
+</section>
+
 <section class="panel">
   <div class="panel-head">
-    <h2>السجلات اليومية - دفعة {{ batch["batch_num"] or batch["id"] }}</h2>
+    <h2>إضافة أو تحديث سجل يومي</h2>
     <div class="inline-actions">
       <a class="btn-link" href="{{ url_for('export_daily_records_excel', batch_id=batch['id']) }}">تصدير Excel</a>
-      <a href="{{ url_for('batch_detail', batch_id=batch['id']) }}">رجوع</a>
+      <a class="ghost-link" href="{{ url_for('batch_detail', batch_id=batch['id']) }}">رجوع للتفاصيل</a>
     </div>
   </div>
+
   <form method="post" class="grid-form">
-    <label>التاريخ
-      <input type="date" name="rec_date" required>
-    </label>
-    <label>رقم اليوم
-      <input type="number" min="0" name="day_num" required>
-    </label>
-    <label>عدد النفوق
-      <input type="number" min="0" name="dead_count" value="0">
-    </label>
-    <label>العلف (كجم)
-      <input type="number" step="0.01" min="0" name="feed_kg" value="0">
-    </label>
-    <label>الماء (لتر)
-      <input type="number" step="0.01" min="0" name="water_ltr" value="0">
-    </label>
-    <label class="full">ملاحظات
-      <input name="notes">
-    </label>
+    <div class="field-group full">
+      <h3>بيانات اليوم</h3>
+      <div class="grid-form">
+        <label>التاريخ
+          <input type="date" name="rec_date" required>
+        </label>
+        <label>رقم اليوم
+          <input type="number" min="0" name="day_num" required>
+        </label>
+        <label>عدد النفوق
+          <input type="number" min="0" name="dead_count" value="0">
+        </label>
+        <label>عدد الاستبعاد
+          <input type="number" min="0" name="culls_count" value="0">
+        </label>
+      </div>
+    </div>
+
+    <div class="field-group full">
+      <h3>البيئة والاستهلاك</h3>
+      <div class="grid-form">
+        <label>العلف (كجم)
+          <input type="number" step="0.01" min="0" name="feed_kg" value="0">
+        </label>
+        <label>الماء (لتر)
+          <input type="number" step="0.01" min="0" name="water_ltr" value="0">
+        </label>
+        <label>أدنى حرارة (°C)
+          <input type="number" step="0.1" name="temp_min_c" value="0">
+        </label>
+        <label>أعلى حرارة (°C)
+          <input type="number" step="0.1" name="temp_max_c" value="0">
+        </label>
+        <label>أدنى رطوبة (%)
+          <input type="number" step="0.1" min="0" max="100" name="humidity_min_pct" value="0">
+        </label>
+        <label>أعلى رطوبة (%)
+          <input type="number" step="0.1" min="0" max="100" name="humidity_max_pct" value="0">
+        </label>
+      </div>
+    </div>
+
+    <div class="field-group full">
+      <h3>العلامات والملاحظات</h3>
+      <div class="grid-form">
+        <label class="full">العلامات الإكلينيكية
+          <input name="clinical_signs_text" placeholder="مثال: سعال - خمول - إسهال">
+        </label>
+        <label class="full">ملاحظات
+          <input name="notes" placeholder="ملاحظات إضافية عن اليوم">
+        </label>
+      </div>
+    </div>
+
+    <div class="full treatment-box">
+      <div class="panel-head">
+        <h3>العلاجات المستخدمة اليوم</h3>
+        <button type="button" id="add-treatment-row" class="btn-link">إضافة صنف</button>
+      </div>
+      <div id="treatment-rows">
+        <div class="treatment-row">
+          <label>العلاج
+            <select name="treatment_catalog_id[]">
+              <option value="">-- اختر --</option>
+              {% for item in treatment_catalog %}
+                <option value="{{ item['id'] }}" data-name="{{ item['product_name'] }}" data-active="{{ item['active_ingredient'] }}" data-class="{{ item['treatment_class'] }}">
+                  {{ item["product_name"] }} | {{ item["active_ingredient"] }} | {{ item["treatment_class"] }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>اسم العلاج (حر)
+            <input name="treatment_name[]" placeholder="اختياري">
+          </label>
+          <label>المادة الفعالة (حر)
+            <input name="treatment_active[]" placeholder="اختياري">
+          </label>
+          <label>فئة العلاج
+            <input name="treatment_class[]" placeholder="antibiotic / anticoccidial">
+          </label>
+          <label>الجرعة
+            <input name="treatment_dose[]" placeholder="مثال: 1ml/1L">
+          </label>
+          <label>ملاحظات العلاج
+            <input name="treatment_notes[]" placeholder="اختياري">
+          </label>
+          <button type="button" class="danger remove-treatment-row">حذف</button>
+        </div>
+      </div>
+    </div>
     <button type="submit">حفظ السجل</button>
   </form>
 </section>
 
 <section class="panel">
+  <div class="panel-head">
+    <div>
+      <h2>السجلات السابقة</h2>
+      <p class="click-hint">اضغط على حذف لإزالة السجل من نفس التاريخ.</p>
+    </div>
+    <span class="badge">{{ rows|length }} سجل</span>
+  </div>
   <div class="table-wrap">
     <table>
       <thead>
@@ -40,32 +125,57 @@
           <th>التاريخ</th>
           <th>اليوم</th>
           <th>نفوق</th>
+          <th>استبعاد</th>
           <th>علف</th>
           <th>ماء</th>
-          <th>ملاحظات</th>
+          <th>حرارة (صغرى/كبرى)</th>
+          <th>العلاجات</th>
+          <th>التحليل</th>
+          <th>المخاطر</th>
           <th>حذف</th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
+        {% set risk = r["risk_score"] or 0 %}
+        {% set risk_class = 'high' if risk >= 70 else ('medium' if risk >= 40 else 'low') %}
         <tr>
           <td>{{ r["rec_date"] }}</td>
-          <td>{{ r["day_num"] }}</td>
+          <td>{{ r["day_num"]|num }}</td>
           <td>{{ r["dead_count"]|num }}</td>
+          <td>{{ r["culls_count"]|num }}</td>
           <td>{{ r["feed_kg"]|num(2) }}</td>
           <td>{{ r["water_ltr"]|num(2) }}</td>
-          <td>{{ r["notes"] or "-" }}</td>
+          <td>{{ r["temp_min_c"]|num(1) }} / {{ r["temp_max_c"]|num(1) }}</td>
           <td>
-            <form method="post" action="{{ url_for('delete_daily_record', record_id=r['id']) }}" onsubmit="return confirm('حذف السجل؟')">
+            {% set tr = treatments_map.get(r["rec_date"], []) %}
+            {% if tr %}
+              {% for item in tr %}
+                <div>{{ item["product_name"] }}{% if item["dose_text"] %} ({{ item["dose_text"] }}){% endif %}</div>
+              {% endfor %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+          <td>{{ r["analysis_summary"] or "-" }}</td>
+          <td>
+            <span class="risk-pill {{ risk_class }}">{{ r["analysis_status"] or "غير متاح" }} | {{ risk|num(1) }}</span>
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('delete_daily_record', record_id=r['id']) }}" data-confirm="حذف السجل اليومي؟">
               <button class="danger" type="submit">حذف</button>
             </form>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7">لا يوجد سجلات.</td></tr>
+        <tr><td colspan="11">لا يوجد سجلات.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='daily-records.js') }}"></script>
 {% endblock %}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import sqlite3
 import sys
@@ -9,6 +10,7 @@ import tempfile
 from datetime import date, datetime
 from pathlib import Path
 from statistics import mean
+from typing import Any
 
 from flask import Flask, Response, flash, redirect, render_template, request, url_for
 from openpyxl import Workbook
@@ -50,6 +52,15 @@ from core.database import (
     get_conn,
     get_setting,
     set_setting,
+)
+from core.health_engine import analyze_daily_health
+from core.health_repository import load_daily_input, load_history_before, save_daily_analysis
+from core.import_engine import (
+    apply_mapping_edits,
+    build_staging,
+    commit_run,
+    detect_profile,
+    parse_files,
 )
 
 app = Flask(__name__)
@@ -263,6 +274,137 @@ def to_int(value: str | None, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def _collect_treatment_inputs() -> list[dict[str, str]]:
+    catalog_ids = request.form.getlist("treatment_catalog_id[]")
+    custom_names = request.form.getlist("treatment_name[]")
+    custom_active = request.form.getlist("treatment_active[]")
+    custom_classes = request.form.getlist("treatment_class[]")
+    dose_values = request.form.getlist("treatment_dose[]")
+    notes_values = request.form.getlist("treatment_notes[]")
+
+    payload: list[dict[str, str]] = []
+    max_rows = max(
+        len(catalog_ids),
+        len(custom_names),
+        len(custom_active),
+        len(custom_classes),
+        len(dose_values),
+        len(notes_values),
+    )
+    for idx in range(max_rows):
+        catalog_id = catalog_ids[idx] if idx < len(catalog_ids) else ""
+        cid = to_int(catalog_id, 0)
+        name = custom_names[idx].strip() if idx < len(custom_names) else ""
+        active = custom_active[idx].strip() if idx < len(custom_active) else ""
+        cls = custom_classes[idx].strip().lower() if idx < len(custom_classes) else ""
+        if cid <= 0 and not name and not active:
+            continue
+        payload.append(
+            {
+                "catalog_id": str(cid),
+                "product_name": name,
+                "active_ingredient": active,
+                "treatment_class": cls,
+                "dose_text": dose_values[idx].strip() if idx < len(dose_values) else "",
+                "notes": notes_values[idx].strip() if idx < len(notes_values) else "",
+            }
+        )
+    return payload
+
+
+def _infer_treatment_class(product_name: str, active_ingredient: str) -> str:
+    value = f"{product_name} {active_ingredient}".lower()
+    if not value.strip():
+        return "supportive"
+    if any(k in value for k in ("amprolium", "toltrazuril", "diclazuril", "sulfaquinoxaline", "sulfachloropyrazine", "coccid")):
+        return "anticoccidial"
+    if any(k in value for k in ("tylosin", "doxy", "oxy", "florfenicol", "enrofloxacin", "amoxicillin", "colistin", "linco", "trimethoprim", "sulfadiazine")):
+        return "antibiotic"
+    if any(k in value for k in ("bromhexine", "expectorant", "menthol", "mucolytic", "resp")):
+        return "respiratory_support"
+    if any(k in value for k in ("probiotic", "bacillus", "yeast")):
+        return "probiotic"
+    if any(k in value for k in ("vitamin", "electrolyte", "ad3e", "ascorbic", "vit c", "multivit")):
+        return "vitamin_electrolyte"
+    if any(k in value for k in ("immune", "glucan", "immun")):
+        return "immune_support"
+    if any(k in value for k in ("liver", "silymarin", "hepa")):
+        return "liver_support"
+    return "supportive"
+
+
+def _save_daily_treatments(
+    conn: sqlite3.Connection,
+    *,
+    batch_id: int,
+    rec_date: str,
+    record_id: int,
+    treatment_inputs: list[dict[str, str]],
+) -> None:
+    conn.execute("DELETE FROM daily_treatments WHERE batch_id=? AND rec_date=?", (batch_id, rec_date))
+    if not treatment_inputs:
+        return
+
+    for item in treatment_inputs:
+        product_name = (item.get("product_name") or "").strip()
+        active_ingredient = (item.get("active_ingredient") or "").strip().lower()
+        treatment_class = (item.get("treatment_class") or "").strip().lower()
+        catalog_id = to_int(item.get("catalog_id"), 0)
+
+        catalog_row = conn.execute(
+            """
+            SELECT id, product_name, active_ingredient, treatment_class
+            FROM treatment_catalog
+            WHERE id=? AND is_active=1
+            """,
+            (catalog_id,),
+        ).fetchone()
+        saved_catalog_id: int | None = None
+        if catalog_row:
+            saved_catalog_id = int(catalog_row["id"])
+            if not product_name:
+                product_name = (catalog_row["product_name"] or "").strip()
+            if not active_ingredient:
+                active_ingredient = (catalog_row["active_ingredient"] or "").strip().lower()
+            if not treatment_class:
+                treatment_class = (catalog_row["treatment_class"] or "").strip().lower()
+
+        if not product_name:
+            product_name = active_ingredient or "custom_treatment"
+        if not treatment_class:
+            treatment_class = _infer_treatment_class(product_name, active_ingredient)
+
+        conn.execute(
+            """
+            INSERT INTO daily_treatments(
+                batch_id, record_id, rec_date, catalog_id,
+                product_name, active_ingredient, treatment_class, dose_text, notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                batch_id,
+                record_id,
+                rec_date,
+                saved_catalog_id,
+                product_name,
+                active_ingredient,
+                treatment_class,
+                item.get("dose_text", ""),
+                item.get("notes", ""),
+            ),
+        )
+
+
+def _run_and_store_daily_analysis(conn: sqlite3.Connection, *, batch_id: int, rec_date: str) -> None:
+    daily_input = load_daily_input(conn, batch_id, rec_date)
+    if not daily_input:
+        return
+    history = load_history_before(conn, batch_id, rec_date, days=3)
+    result = analyze_daily_health(daily_input, history)
+    save_daily_analysis(conn, batch_id, rec_date, result)
 
 
 def recalc_batch(batch_id: int) -> None:
@@ -741,6 +883,67 @@ def num_filter(value: float | int | None, digits: int = 0) -> str:
         return "0"
 
 
+def _safe_int_setting(value: str, default: int, low: int, high: int) -> int:
+    try:
+        parsed = int(float((value or "").strip()))
+    except Exception:
+        return default
+    return max(low, min(high, parsed))
+
+
+def _safe_float_setting(value: str, default: float, low: float, high: float) -> float:
+    try:
+        parsed = float((value or "").strip())
+    except Exception:
+        return default
+    return max(low, min(high, parsed))
+
+
+def _sanitize_ui_setting(key: str, value: str, default: str) -> str:
+    raw = (value or "").strip()
+    if key == "ui_font_scale":
+        return str(_safe_int_setting(raw, _safe_int_setting(default, 110, 90, 150), 90, 150))
+    if key == "ui_line_height":
+        return f"{_safe_float_setting(raw, _safe_float_setting(default, 1.65, 1.3, 2.0), 1.3, 2.0):.2f}"
+    if key == "ui_density":
+        clean = raw.lower()
+        return clean if clean in {"compact", "balanced", "comfortable"} else default
+    if key == "ui_separator_strength":
+        clean = raw.lower()
+        return clean if clean in {"light", "normal", "strong"} else default
+    if key == "ui_font_family":
+        clean = raw.lower()
+        return clean if clean in {"system", "amiri"} else default
+    return raw or default
+
+
+def _resolve_ui_settings() -> dict[str, str]:
+    font_scale = _sanitize_ui_setting("ui_font_scale", get_setting("ui_font_scale", "110"), "110")
+    line_height = _sanitize_ui_setting("ui_line_height", get_setting("ui_line_height", "1.65"), "1.65")
+    density = _sanitize_ui_setting("ui_density", get_setting("ui_density", "balanced"), "balanced")
+    separator = _sanitize_ui_setting("ui_separator_strength", get_setting("ui_separator_strength", "strong"), "strong")
+    font_family = _sanitize_ui_setting("ui_font_family", get_setting("ui_font_family", "system"), "system")
+
+    scale_value = _safe_int_setting(font_scale, 110, 90, 150)
+    line_value = _safe_float_setting(line_height, 1.65, 1.3, 2.0)
+    font_px = round(16.0 * (scale_value / 100.0), 2)
+
+    return {
+        "font_scale": str(scale_value),
+        "line_height": f"{line_value:.2f}",
+        "density": density,
+        "separator": separator,
+        "font_family": font_family,
+        "body_classes": f"density-{density} sep-{separator} font-{font_family}",
+        "inline_style": f"--ui-font-size:{font_px}px;--ui-line-height:{line_value:.2f};",
+    }
+
+
+@app.context_processor
+def inject_ui_settings() -> dict[str, dict[str, str]]:
+    return {"ui": _resolve_ui_settings()}
+
+
 @app.route("/")
 def dashboard():
     warehouse_id = to_int(request.args.get("warehouse_id"), 0) or None
@@ -817,17 +1020,17 @@ def export_warehouses_csv():
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT w.id, w.name, COALESCE(w.capacity, 0) AS capacity, w.notes, COUNT(b.id) AS batches_count
+            SELECT w.id, w.name, w.notes, COUNT(b.id) AS batches_count
             FROM warehouses w
             LEFT JOIN batches b ON b.warehouse_id = w.id
             GROUP BY w.id
             ORDER BY w.id DESC
             """
         ).fetchall()
-    payload = [[r["id"], r["name"], r["capacity"], r["batches_count"], r["notes"] or ""] for r in rows]
+    payload = [[r["id"], r["name"], r["batches_count"], r["notes"] or ""] for r in rows]
     return make_csv_response(
         "warehouses.csv",
-        ["id", "name", "capacity", "batches_count", "notes"],
+        ["المعرف", "اسم العنبر", "عدد الدفعات", "ملاحظات"],
         payload,
     )
 
@@ -837,18 +1040,18 @@ def export_warehouses_excel():
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT w.id, w.name, COALESCE(w.capacity, 0) AS capacity, w.notes, COUNT(b.id) AS batches_count
+            SELECT w.id, w.name, w.notes, COUNT(b.id) AS batches_count
             FROM warehouses w
             LEFT JOIN batches b ON b.warehouse_id = w.id
             GROUP BY w.id
             ORDER BY w.id DESC
             """
         ).fetchall()
-    payload = [[r["id"], r["name"], r["capacity"], r["batches_count"], r["notes"] or ""] for r in rows]
+    payload = [[r["id"], r["name"], r["batches_count"], r["notes"] or ""] for r in rows]
     return make_excel_response(
         "warehouses.xlsx",
-        "Warehouses",
-        ["id", "name", "capacity", "batches_count", "notes"],
+        "العنابر",
+        ["المعرف", "اسم العنبر", "عدد الدفعات", "ملاحظات"],
         payload,
     )
 
@@ -1047,35 +1250,109 @@ def batch_detail(batch_id: int):
 
 @app.route("/batches/<int:batch_id>/daily", methods=["GET", "POST"])
 def daily_records(batch_id: int):
+    with get_conn() as conn:
+        batch = conn.execute("SELECT id, batch_num FROM batches WHERE id=?", (batch_id,)).fetchone()
+    if not batch:
+        flash("الدفعة غير موجودة.", "error")
+        return redirect(url_for("batches"))
+
     if request.method == "POST":
+        rec_date = request.form.get("rec_date", "").strip()
+        treatment_inputs = _collect_treatment_inputs()
         with get_conn() as conn:
             conn.execute(
                 """
-                INSERT INTO daily_records(batch_id, rec_date, day_num, dead_count, feed_kg, water_ltr, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO daily_records(
+                    batch_id, rec_date, day_num, dead_count, culls_count, feed_kg, water_ltr,
+                    temp_min_c, temp_max_c, humidity_min_pct, humidity_max_pct, clinical_signs_text, notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(batch_id, rec_date)
-                DO UPDATE SET day_num=excluded.day_num, dead_count=excluded.dead_count,
-                              feed_kg=excluded.feed_kg, water_ltr=excluded.water_ltr, notes=excluded.notes
+                DO UPDATE SET
+                    day_num=excluded.day_num,
+                    dead_count=excluded.dead_count,
+                    culls_count=excluded.culls_count,
+                    feed_kg=excluded.feed_kg,
+                    water_ltr=excluded.water_ltr,
+                    temp_min_c=excluded.temp_min_c,
+                    temp_max_c=excluded.temp_max_c,
+                    humidity_min_pct=excluded.humidity_min_pct,
+                    humidity_max_pct=excluded.humidity_max_pct,
+                    clinical_signs_text=excluded.clinical_signs_text,
+                    notes=excluded.notes
                 """,
                 (
                     batch_id,
-                    request.form.get("rec_date", "").strip(),
+                    rec_date,
                     to_int(request.form.get("day_num")),
                     to_int(request.form.get("dead_count")),
+                    to_int(request.form.get("culls_count")),
                     to_float(request.form.get("feed_kg")),
                     to_float(request.form.get("water_ltr")),
+                    to_float(request.form.get("temp_min_c")),
+                    to_float(request.form.get("temp_max_c")),
+                    to_float(request.form.get("humidity_min_pct")),
+                    to_float(request.form.get("humidity_max_pct")),
+                    request.form.get("clinical_signs_text", "").strip(),
                     request.form.get("notes", "").strip(),
                 ),
             )
+            record_row = conn.execute(
+                "SELECT id FROM daily_records WHERE batch_id=? AND rec_date=?",
+                (batch_id, rec_date),
+            ).fetchone()
+            if record_row:
+                _save_daily_treatments(
+                    conn,
+                    batch_id=batch_id,
+                    rec_date=rec_date,
+                    record_id=int(record_row["id"]),
+                    treatment_inputs=treatment_inputs,
+                )
+                _run_and_store_daily_analysis(conn, batch_id=batch_id, rec_date=rec_date)
             conn.commit()
         recalc_batch(batch_id)
         flash("تم حفظ السجل اليومي.", "success")
         return redirect(url_for("daily_records", batch_id=batch_id))
 
     with get_conn() as conn:
-        batch = conn.execute("SELECT id, batch_num FROM batches WHERE id=?", (batch_id,)).fetchone()
         rows = conn.execute("SELECT * FROM daily_records WHERE batch_id=? ORDER BY rec_date DESC", (batch_id,)).fetchall()
-    return render_template("daily_records.html", batch=batch, rows=rows)
+        catalog = conn.execute(
+            """
+            SELECT id, product_name, active_ingredient, treatment_class
+            FROM treatment_catalog
+            WHERE is_active=1
+            ORDER BY sort_order, product_name
+            """
+        ).fetchall()
+        treatment_rows = conn.execute(
+            """
+            SELECT rec_date, product_name, treatment_class, dose_text
+            FROM daily_treatments
+            WHERE batch_id=?
+            ORDER BY rec_date DESC, id ASC
+            """,
+            (batch_id,),
+        ).fetchall()
+    treatments_map: dict[str, list[dict[str, str]]] = {}
+    for row in treatment_rows:
+        rec_date = row["rec_date"]
+        if rec_date not in treatments_map:
+            treatments_map[rec_date] = []
+        treatments_map[rec_date].append(
+            {
+                "product_name": row["product_name"] or "",
+                "treatment_class": row["treatment_class"] or "",
+                "dose_text": row["dose_text"] or "",
+            }
+        )
+    return render_template(
+        "daily_records.html",
+        batch=batch,
+        rows=rows,
+        treatment_catalog=catalog,
+        treatments_map=treatments_map,
+    )
 
 
 @app.get("/batches/<int:batch_id>/daily/export.csv")
@@ -1083,7 +1360,9 @@ def export_daily_records_csv(batch_id: int):
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT rec_date, day_num, dead_count, feed_kg, water_ltr, notes
+            SELECT rec_date, day_num, dead_count, culls_count, feed_kg, water_ltr,
+                   temp_min_c, temp_max_c, humidity_min_pct, humidity_max_pct,
+                   clinical_signs_text, analysis_status, risk_score, notes
             FROM daily_records
             WHERE batch_id=?
             ORDER BY rec_date
@@ -1091,12 +1370,42 @@ def export_daily_records_csv(batch_id: int):
             (batch_id,),
         ).fetchall()
     payload = [
-        [r["rec_date"], r["day_num"], r["dead_count"], r["feed_kg"], r["water_ltr"], r["notes"] or ""]
+        [
+            r["rec_date"],
+            r["day_num"],
+            r["dead_count"],
+            r["culls_count"],
+            r["feed_kg"],
+            r["water_ltr"],
+            r["temp_min_c"],
+            r["temp_max_c"],
+            r["humidity_min_pct"],
+            r["humidity_max_pct"],
+            r["clinical_signs_text"] or "",
+            r["analysis_status"] or "",
+            r["risk_score"],
+            r["notes"] or "",
+        ]
         for r in rows
     ]
     return make_csv_response(
         f"batch_{batch_id}_daily_records.csv",
-        ["rec_date", "day_num", "dead_count", "feed_kg", "water_ltr", "notes"],
+        [
+            "التاريخ",
+            "رقم اليوم",
+            "النفوق",
+            "الاستبعاد",
+            "العلف (كجم)",
+            "الماء (لتر)",
+            "أدنى حرارة",
+            "أعلى حرارة",
+            "أدنى رطوبة",
+            "أعلى رطوبة",
+            "العلامات الإكلينيكية",
+            "حالة التحليل",
+            "درجة المخاطر",
+            "ملاحظات",
+        ],
         payload,
     )
 
@@ -1106,7 +1415,9 @@ def export_daily_records_excel(batch_id: int):
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT rec_date, day_num, dead_count, feed_kg, water_ltr, notes
+            SELECT rec_date, day_num, dead_count, culls_count, feed_kg, water_ltr,
+                   temp_min_c, temp_max_c, humidity_min_pct, humidity_max_pct,
+                   clinical_signs_text, analysis_status, risk_score, notes
             FROM daily_records
             WHERE batch_id=?
             ORDER BY rec_date
@@ -1114,13 +1425,43 @@ def export_daily_records_excel(batch_id: int):
             (batch_id,),
         ).fetchall()
     payload = [
-        [r["rec_date"], r["day_num"], r["dead_count"], r["feed_kg"], r["water_ltr"], r["notes"] or ""]
+        [
+            r["rec_date"],
+            r["day_num"],
+            r["dead_count"],
+            r["culls_count"],
+            r["feed_kg"],
+            r["water_ltr"],
+            r["temp_min_c"],
+            r["temp_max_c"],
+            r["humidity_min_pct"],
+            r["humidity_max_pct"],
+            r["clinical_signs_text"] or "",
+            r["analysis_status"] or "",
+            r["risk_score"],
+            r["notes"] or "",
+        ]
         for r in rows
     ]
     return make_excel_response(
         f"batch_{batch_id}_daily_records.xlsx",
-        "DailyRecords",
-        ["rec_date", "day_num", "dead_count", "feed_kg", "water_ltr", "notes"],
+        "السجل_اليومي",
+        [
+            "التاريخ",
+            "رقم اليوم",
+            "النفوق",
+            "الاستبعاد",
+            "العلف (كجم)",
+            "الماء (لتر)",
+            "أدنى حرارة",
+            "أعلى حرارة",
+            "أدنى رطوبة",
+            "أعلى رطوبة",
+            "العلامات الإكلينيكية",
+            "حالة التحليل",
+            "درجة المخاطر",
+            "ملاحظات",
+        ],
         payload,
     )
 
@@ -1128,11 +1469,13 @@ def export_daily_records_excel(batch_id: int):
 @app.post("/daily/<int:record_id>/delete")
 def delete_daily_record(record_id: int):
     with get_conn() as conn:
-        row = conn.execute("SELECT batch_id FROM daily_records WHERE id=?", (record_id,)).fetchone()
+        row = conn.execute("SELECT batch_id, rec_date FROM daily_records WHERE id=?", (record_id,)).fetchone()
         if not row:
             flash("السجل غير موجود.", "error")
             return redirect(url_for("batches"))
         batch_id = row["batch_id"]
+        rec_date = row["rec_date"]
+        conn.execute("DELETE FROM daily_treatments WHERE batch_id=? AND rec_date=?", (batch_id, rec_date))
         conn.execute("DELETE FROM daily_records WHERE id=?", (record_id,))
         conn.commit()
     recalc_batch(batch_id)
@@ -1239,7 +1582,7 @@ def export_market_sales_csv(batch_id: int):
     ]
     return make_csv_response(
         f"batch_{batch_id}_market_sales.csv",
-        ["sale_date", "office", "qty_sent", "deaths", "qty_sold", "net_val", "inv_num"],
+        ["تاريخ البيع", "المكتب", "الكمية المرسلة", "وفيات السوق", "المباع", "صافي الفاتورة", "رقم الفاتورة"],
         payload,
     )
 
@@ -1262,8 +1605,8 @@ def export_market_sales_excel(batch_id: int):
     ]
     return make_excel_response(
         f"batch_{batch_id}_market_sales.xlsx",
-        "MarketSales",
-        ["sale_date", "office", "qty_sent", "deaths", "qty_sold", "net_val", "inv_num"],
+        "مبيعات_السوق",
+        ["تاريخ البيع", "المكتب", "الكمية المرسلة", "وفيات السوق", "المباع", "صافي الفاتورة", "رقم الفاتورة"],
         payload,
     )
 
@@ -1334,7 +1677,7 @@ def export_batch_costs_csv(batch_id: int):
     payload = [[r["code"], r["name_ar"], r["category"], r["qty"], r["amount"]] for r in rows]
     return make_csv_response(
         f"batch_{batch_id}_costs.csv",
-        ["code", "name_ar", "category", "qty", "amount"],
+        ["الكود", "اسم البند", "الفئة", "الكمية", "القيمة"],
         payload,
     )
 
@@ -1355,8 +1698,8 @@ def export_batch_costs_excel(batch_id: int):
     payload = [[r["code"], r["name_ar"], r["category"], r["qty"], r["amount"]] for r in rows]
     return make_excel_response(
         f"batch_{batch_id}_costs.xlsx",
-        "Costs",
-        ["code", "name_ar", "category", "qty", "amount"],
+        "التكاليف",
+        ["الكود", "اسم البند", "الفئة", "الكمية", "القيمة"],
         payload,
     )
 
@@ -1412,7 +1755,7 @@ def export_batch_revenues_csv(batch_id: int):
     payload = [[r["code"], r["name_ar"], r["category"], r["qty"], r["amount"]] for r in rows]
     return make_csv_response(
         f"batch_{batch_id}_revenues.csv",
-        ["code", "name_ar", "category", "qty", "amount"],
+        ["الكود", "اسم البند", "الفئة", "الكمية", "القيمة"],
         payload,
     )
 
@@ -1433,8 +1776,8 @@ def export_batch_revenues_excel(batch_id: int):
     payload = [[r["code"], r["name_ar"], r["category"], r["qty"], r["amount"]] for r in rows]
     return make_excel_response(
         f"batch_{batch_id}_revenues.xlsx",
-        "Revenues",
-        ["code", "name_ar", "category", "qty", "amount"],
+        "الإيرادات",
+        ["الكود", "اسم البند", "الفئة", "الكمية", "القيمة"],
         payload,
     )
 
@@ -1485,8 +1828,8 @@ def build_reports_export_payload(
         ]
         return (
             "warehouses_summary",
-            "Warehouses",
-            ["warehouse_name", "batches_count", "chicks_total", "cost_total", "revenue_total", "net_total", "avg_mortality"],
+            "ملخص_العنابر",
+            ["العنبر", "عدد الدفعات", "إجمالي الكتاكيت", "إجمالي التكاليف", "إجمالي الإيرادات", "الصافي", "متوسط النفوق"],
             export_rows,
         )
 
@@ -1504,8 +1847,8 @@ def build_reports_export_payload(
         ]
         return (
             "annual_summary",
-            "Annual",
-            ["fiscal_year", "batches_count", "cost_total", "revenue_total", "net_total"],
+            "ملخص_سنوي",
+            ["السنة المالية", "عدد الدفعات", "إجمالي التكاليف", "إجمالي الإيرادات", "الصافي"],
             export_rows,
         )
 
@@ -1541,20 +1884,20 @@ def build_reports_export_payload(
         ]
         return (
             "batches_report",
-            "Batches",
+            "تقرير_الدفعات",
             [
-                "id",
-                "batch_num",
-                "warehouse_name",
-                "date_in",
-                "date_out",
-                "chicks",
-                "total_dead",
-                "mort_rate",
-                "fcr",
-                "total_cost",
-                "total_rev",
-                "net_result",
+                "المعرف",
+                "رقم الدفعة",
+                "العنبر",
+                "تاريخ الدخول",
+                "تاريخ الخروج",
+                "الكتاكيت",
+                "إجمالي النفوق",
+                "نسبة النفوق",
+                "معامل التحويل",
+                "إجمالي التكلفة",
+                "إجمالي الإيراد",
+                "الصافي",
             ],
             export_rows,
         )
@@ -1562,25 +1905,25 @@ def build_reports_export_payload(
     if report_type == "sales_types":
         rows = data["sales_by_type_rows"]
         export_rows = [[row["sale_type"], row["qty_total"], row["amount_total"]] for row in rows]
-        return ("sales_by_type", "SalesTypes", ["sale_type", "qty_total", "amount_total"], export_rows)
+        return ("sales_by_type", "أنواع_المبيعات", ["نوع البيع", "إجمالي الكمية", "إجمالي القيمة"], export_rows)
 
     if report_type == "cost_types":
         rows = data["cost_types_rows"]
         export_rows = [[row["type_name"], row["category"], row["qty_total"], row["amount_total"]] for row in rows]
-        return ("cost_types_summary", "CostTypes", ["type_name", "category", "qty_total", "amount_total"], export_rows)
+        return ("cost_types_summary", "أنواع_التكاليف", ["اسم البند", "الفئة", "إجمالي الكمية", "إجمالي القيمة"], export_rows)
 
     if report_type == "revenue_types":
         rows = data["revenue_types_rows"]
         export_rows = [[row["type_name"], row["category"], row["qty_total"], row["amount_total"]] for row in rows]
-        return ("revenue_types_summary", "RevenueTypes", ["type_name", "category", "qty_total", "amount_total"], export_rows)
+        return ("revenue_types_summary", "أنواع_الإيرادات", ["اسم البند", "الفئة", "إجمالي الكمية", "إجمالي القيمة"], export_rows)
 
     if report_type == "daily_summary":
         row = data["daily_summary_row"]
         export_rows = [[row["entries_count"], row["dead_total"], row["feed_total"], row["water_total"], row["avg_daily_deaths"]]]
         return (
             "daily_summary",
-            "DailySummary",
-            ["entries_count", "dead_total", "feed_total", "water_total", "avg_daily_deaths"],
+            "ملخص_يومي",
+            ["عدد السجلات", "إجمالي النفوق", "إجمالي العلف", "إجمالي الماء", "متوسط النفوق اليومي"],
             export_rows,
         )
 
@@ -1705,14 +2048,14 @@ def export_reports_pdf():
     else:
         pdf.set_font("Arial", "", 12)
 
-    company_name = get_setting("company_name", "Poultry Company")
-    pdf.cell(0, 8, ar_text(f"{company_name} - Executive Report"), new_x="LMARGIN", new_y="NEXT", align="C")
+    company_name = get_setting("company_name", "شركة الدواجن")
+    pdf.cell(0, 8, ar_text(f"{company_name} - التقرير التنفيذي"), new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 10)
     pdf.cell(
         0,
         7,
         ar_text(
-            f"Report date: {datetime.now().strftime('%Y-%m-%d %H:%M')} | Warehouse filter: {warehouse_id or 'All'} | Fiscal year: {fiscal_year or 'All'}"
+            f"تاريخ التقرير: {datetime.now().strftime('%Y-%m-%d %H:%M')} | فلتر العنبر: {warehouse_id or 'الكل'} | السنة المالية: {fiscal_year or 'الكل'}"
         ),
         new_x="LMARGIN",
         new_y="NEXT",
@@ -1724,19 +2067,19 @@ def export_reports_pdf():
     chart_paths: list[str] = []
     if include_dashboard:
         pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 11)
-        pdf.cell(0, 7, ar_text("Dashboard Metrics"), new_x="LMARGIN", new_y="NEXT", align="R")
+        pdf.cell(0, 7, ar_text("مؤشرات لوحة التحكم"), new_x="LMARGIN", new_y="NEXT", align="R")
         pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 10)
         insights = data["dashboard_insights"]
         kpis = [
-            f"Total costs: {summary['cost_total']:,.2f}",
-            f"Total revenues: {summary['revenue_total']:,.2f}",
-            f"Net result: {summary['net_total']:,.2f}",
-            f"Profit margin: {insights['margin_pct']:.2f}%",
-            f"Average FCR: {insights['avg_fcr']:.3f}",
-            f"Average mortality: {insights['avg_mortality']:.2f}%",
-            f"Farm sales: {insights['farm_sales_total']:,.2f}",
-            f"Market sales: {insights['market_sales_total']:,.2f}",
-            f"Extra revenues: {insights['extra_revenues_total']:,.2f}",
+            f"إجمالي التكاليف: {summary['cost_total']:,.2f}",
+            f"إجمالي الإيرادات: {summary['revenue_total']:,.2f}",
+            f"صافي النتيجة: {summary['net_total']:,.2f}",
+            f"هامش الربح: {insights['margin_pct']:.2f}%",
+            f"متوسط FCR: {insights['avg_fcr']:.3f}",
+            f"متوسط النفوق: {insights['avg_mortality']:.2f}%",
+            f"مبيعات العنبر: {insights['farm_sales_total']:,.2f}",
+            f"مبيعات السوق: {insights['market_sales_total']:,.2f}",
+            f"إيرادات إضافية: {insights['extra_revenues_total']:,.2f}",
         ]
         for line in kpis:
             pdf.cell(0, 6, ar_text(line), new_x="LMARGIN", new_y="NEXT", align="R")
@@ -1751,9 +2094,9 @@ def export_reports_pdf():
 
     pdf.ln(3)
     pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 11)
-    pdf.cell(0, 7, ar_text("Warehouse Summary"), new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.cell(0, 7, ar_text("ملخص العنابر"), new_x="LMARGIN", new_y="NEXT", align="R")
     pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 9)
-    headers = ["Warehouse", "Batches", "Costs", "Revenues", "Net"]
+    headers = ["العنبر", "الدفعات", "التكاليف", "الإيرادات", "الصافي"]
     widths = [54, 20, 35, 35, 35]
     for h, w in zip(headers, widths):
         pdf.cell(w, 7, ar_text(h), border=1, align="C")
@@ -1772,9 +2115,9 @@ def export_reports_pdf():
 
     pdf.ln(3)
     pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 11)
-    pdf.cell(0, 7, ar_text("Top 25 Batches"), new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.cell(0, 7, ar_text("أفضل 25 دفعة"), new_x="LMARGIN", new_y="NEXT", align="R")
     pdf.set_font("Arabic" if has_arabic_font else "Arial", "", 9)
-    headers = ["Batch", "Warehouse", "Date In", "Date Out", "FCR", "Net"]
+    headers = ["الدفعة", "العنبر", "الدخول", "الخروج", "FCR", "الصافي"]
     widths = [20, 45, 30, 30, 20, 34]
     for h, w in zip(headers, widths):
         pdf.cell(w, 7, ar_text(h), border=1, align="C")
@@ -1806,6 +2149,319 @@ def export_reports_pdf():
     return make_pdf_response(filename, pdf_bytes)
 
 
+def _collect_import_input_files() -> list[str]:
+    files: list[str] = []
+    upload_items = request.files.getlist("files")
+    if upload_items:
+        tmp_dir = Path(tempfile.gettempdir()) / "poultry_import_uploads"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        for idx, item in enumerate(upload_items):
+            if not item or not getattr(item, "filename", ""):
+                continue
+            suffix = Path(str(item.filename)).suffix.lower()
+            if suffix not in {".xlsm", ".xlsx", ".xls"}:
+                continue
+            saved_path = tmp_dir / f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{idx}{suffix}"
+            item.save(saved_path)
+            files.append(str(saved_path))
+
+    folder_path = (request.form.get("folder_path") or "").strip()
+    if folder_path:
+        folder = Path(folder_path)
+        if folder.exists() and folder.is_dir():
+            for p in sorted(folder.glob("*.xlsm")):
+                if not p.name.startswith("~$"):
+                    files.append(str(p))
+            for p in sorted(folder.glob("*.xlsx")):
+                if not p.name.startswith("~$"):
+                    files.append(str(p))
+    return list(dict.fromkeys(files))
+
+
+@app.get("/imports")
+def imports_home():
+    with get_conn() as conn:
+        profiles = conn.execute(
+            """
+            SELECT id, name, source_key, is_default
+            FROM import_profiles
+            WHERE is_active=1
+            ORDER BY is_default DESC, id ASC
+            """
+        ).fetchall()
+        batches = conn.execute(
+            """
+            SELECT b.id, b.batch_num, w.name AS warehouse_name, b.date_in
+            FROM batches b
+            JOIN warehouses w ON w.id=b.warehouse_id
+            ORDER BY b.date_in DESC, b.id DESC
+            LIMIT 300
+            """
+        ).fetchall()
+    return render_template("imports.html", profiles=profiles, batches=batches)
+
+
+@app.post("/imports/upload")
+def imports_upload():
+    files = _collect_import_input_files()
+    if not files:
+        flash("يرجى اختيار ملف Excel أو إدخال مسار مجلد.", "error")
+        return redirect(url_for("imports_home"))
+
+    profile_id = to_int(request.form.get("profile_id"), 0) or None
+    batch_mode = (request.form.get("batch_mode") or "create").strip().lower()
+    if batch_mode not in {"create", "update"}:
+        batch_mode = "create"
+    target_batch_id = to_int(request.form.get("target_batch_id"), 0) or None
+
+    selected_source_key = None
+    if profile_id:
+        with get_conn() as conn:
+            profile_row = conn.execute(
+                "SELECT source_key FROM import_profiles WHERE id=? AND is_active=1",
+                (profile_id,),
+            ).fetchone()
+        if profile_row and profile_row["source_key"]:
+            selected_source_key = str(profile_row["source_key"])
+        else:
+            profile_id = None
+
+    profile_match = detect_profile(files, source_key=selected_source_key)
+    if not profile_match.get("matched"):
+        source_key = str(profile_match.get("source_key") or selected_source_key or "poultry_v4")
+        if source_key != "poultry_v4":
+            bad_files = [f for f in profile_match.get("files", []) if not f.get("ok")]
+            if bad_files:
+                details = ", ".join(
+                    f"{item.get('file_name')}: {item.get('error') or 'invalid workbook'}" for item in bad_files
+                )
+                flash(f"تعذر قراءة بعض الملفات في وضع Generic Excel: {details}", "error")
+            else:
+                flash("تعذر التحقق من ملفات Excel في الوضع العام.", "error")
+            return redirect(url_for("imports_home"))
+        bad_files = [f for f in profile_match.get("files", []) if not f.get("ok")]
+        if bad_files:
+            details = ", ".join(
+                f"{item.get('file_name')}: {', '.join(item.get('missing_sheets') or [])}" for item in bad_files
+            )
+            flash(f"الملف غير مطابق لقالب poultry_v4. التفاصيل: {details}", "error")
+        else:
+            flash("تعذر التحقق من القالب. تأكد من ملفات الاستيراد.", "error")
+        return redirect(url_for("imports_home"))
+
+    resolved_profile_id = profile_id or profile_match.get("profile_id")
+    try:
+        payload = parse_files(files, resolved_profile_id)
+        run_id = build_staging(
+            payload,
+            resolved_profile_id,
+            source_ui="web",
+            created_by="web",
+        )
+    except Exception as exc:
+        flash(f"فشل التحليل: {exc}", "error")
+        return redirect(url_for("imports_home"))
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE import_runs
+            SET batch_mode=?, target_batch_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+            """,
+            (batch_mode, target_batch_id, run_id),
+        )
+        if target_batch_id:
+            conn.execute(
+                "UPDATE import_run_files SET target_batch_id=? WHERE run_id=?",
+                (target_batch_id, run_id),
+            )
+        conn.commit()
+    if payload.get("errors"):
+        flash("تم تجاوز بعض الملفات بسبب أخطاء في التحليل. راجع شاشة النتيجة.", "warning")
+    return redirect(url_for("imports_run_review", run_id=run_id))
+
+
+@app.get("/imports/run/<int:run_id>")
+def imports_run_review(run_id: int):
+    with get_conn() as conn:
+        run = conn.execute(
+            """
+            SELECT r.*, p.name AS profile_name
+            FROM import_runs r
+            LEFT JOIN import_profiles p ON p.id=r.profile_id
+            WHERE r.id=?
+            """,
+            (run_id,),
+        ).fetchone()
+        if not run:
+            flash("عملية الاستيراد غير موجودة.", "error")
+            return redirect(url_for("imports_home"))
+
+        run_files = conn.execute(
+            "SELECT * FROM import_run_files WHERE run_id=? ORDER BY id",
+            (run_id,),
+        ).fetchall()
+        raw_lines = conn.execute(
+            """
+            SELECT l.*, rf.file_name
+            FROM import_run_lines l
+            JOIN import_run_files rf ON rf.id=l.run_file_id
+            WHERE l.run_id=? AND l.line_kind='candidate' AND l.mapping_status<>'ignored'
+            ORDER BY rf.file_name, l.source_sheet, l.source_row, l.id
+            """,
+            (run_id,),
+        ).fetchall()
+        cost_types = conn.execute(
+            "SELECT code, name_ar, category, unit, has_qty FROM cost_types WHERE is_active=1 ORDER BY sort_order, id"
+        ).fetchall()
+        revenue_types = conn.execute(
+            "SELECT code, name_ar, category, unit, has_qty FROM revenue_types WHERE is_active=1 ORDER BY sort_order, id"
+        ).fetchall()
+        unresolved_count = conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM import_run_lines
+            WHERE run_id=? AND line_kind='candidate' AND mapping_status='unmapped'
+            """,
+            (run_id,),
+        ).fetchone()
+
+    lines: list[dict[str, Any]] = []
+    for row in raw_lines:
+        row_dict = dict(row)
+        payload_data: dict[str, Any] = {}
+        try:
+            payload_data = json.loads(str(row_dict.get("payload_json") or "{}"))
+        except Exception:
+            payload_data = {}
+        row_dict["payload"] = payload_data
+        row_dict["source_label_raw"] = payload_data.get("source_label_raw") or row_dict.get("source_label") or ""
+        lines.append(row_dict)
+
+    return render_template(
+        "import_review.html",
+        run=run,
+        run_files=run_files,
+        lines=lines,
+        cost_types=cost_types,
+        revenue_types=revenue_types,
+        unresolved_count=int(unresolved_count["c"] or 0),
+    )
+
+
+@app.post("/imports/run/<int:run_id>/mapping")
+def imports_run_mapping(run_id: int):
+    line_ids = [to_int(x, 0) for x in request.form.getlist("line_id")]
+    edits: list[dict[str, Any]] = []
+    for line_id in line_ids:
+        if line_id <= 0:
+            continue
+        kind = (request.form.get(f"kind_{line_id}") or "").strip()
+        existing_code = (request.form.get(f"existing_code_{line_id}") or "").strip()
+        new_name = (request.form.get(f"new_name_{line_id}") or "").strip()
+        category = (request.form.get(f"category_{line_id}") or "").strip()
+        unit = (request.form.get(f"unit_{line_id}") or "").strip()
+        has_qty = 1 if request.form.get(f"has_qty_{line_id}") else 0
+
+        if kind == "ignore" or not kind:
+            edits.append({"line_id": line_id, "action": "ignore", "target_kind": "ignore"})
+        elif existing_code:
+            edits.append(
+                {
+                    "line_id": line_id,
+                    "action": "existing",
+                    "target_kind": kind,
+                    "target_code": existing_code,
+                    "category": category,
+                    "unit": unit,
+                    "has_qty": has_qty,
+                }
+            )
+        elif new_name:
+            edits.append(
+                {
+                    "line_id": line_id,
+                    "action": "new",
+                    "target_kind": kind,
+                    "target_name": new_name,
+                    "category": category,
+                    "unit": unit,
+                    "has_qty": has_qty,
+                }
+            )
+        else:
+            edits.append({"line_id": line_id, "action": "ignore", "target_kind": "ignore"})
+
+    try:
+        apply_mapping_edits(run_id, edits)
+    except Exception as exc:
+        flash(f"فشل حفظ التصنيفات: {exc}", "error")
+        return redirect(url_for("imports_run_review", run_id=run_id))
+    flash("تم حفظ تصنيفات الربط.", "success")
+    return redirect(url_for("imports_run_review", run_id=run_id))
+
+
+@app.post("/imports/run/<int:run_id>/commit")
+def imports_run_commit(run_id: int):
+    with get_conn() as conn:
+        run = conn.execute("SELECT batch_mode, target_batch_id FROM import_runs WHERE id=?", (run_id,)).fetchone()
+    if not run:
+        flash("عملية الاستيراد غير موجودة.", "error")
+        return redirect(url_for("imports_home"))
+
+    batch_mode = (request.form.get("batch_mode") or run["batch_mode"] or "create").strip().lower()
+    if batch_mode not in {"create", "update"}:
+        batch_mode = "create"
+    merge_mode = (request.form.get("merge_mode") or "replace").strip().lower()
+    if merge_mode not in {"replace", "merge"}:
+        merge_mode = "replace"
+    target_batch_id = to_int(request.form.get("target_batch_id"), 0) or (int(run["target_batch_id"]) if run["target_batch_id"] else None)
+
+    try:
+        report = commit_run(
+            run_id=run_id,
+            batch_mode=batch_mode,
+            merge_mode=merge_mode,
+            target_batch_id=target_batch_id,
+        )
+    except Exception as exc:
+        flash(f"فشل التنفيذ: {exc}", "error")
+        return redirect(url_for("imports_run_review", run_id=run_id))
+    set_setting(f"import_report_{run_id}", json.dumps(report, ensure_ascii=False))
+    if report.get("status") in {"failed", "partial_failed"}:
+        flash("تم التنفيذ مع وجود ملفات فشلت. راجع التقرير.", "warning")
+    else:
+        flash("تم تنفيذ الاستيراد بنجاح.", "success")
+    return redirect(url_for("imports_run_result", run_id=run_id))
+
+
+@app.get("/imports/run/<int:run_id>/result")
+def imports_run_result(run_id: int):
+    with get_conn() as conn:
+        run = conn.execute(
+            """
+            SELECT r.*, p.name AS profile_name
+            FROM import_runs r
+            LEFT JOIN import_profiles p ON p.id=r.profile_id
+            WHERE r.id=?
+            """,
+            (run_id,),
+        ).fetchone()
+        if not run:
+            flash("عملية الاستيراد غير موجودة.", "error")
+            return redirect(url_for("imports_home"))
+        run_files = conn.execute(
+            "SELECT * FROM import_run_files WHERE run_id=? ORDER BY id",
+            (run_id,),
+        ).fetchall()
+    report = {}
+    try:
+        report = json.loads(get_setting(f"import_report_{run_id}", "{}"))
+    except Exception:
+        report = {}
+    return render_template("import_result.html", run=run, run_files=run_files, report=report)
+
+
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
     keys = [
@@ -1819,11 +2475,18 @@ def settings():
         ("tg_token", "Telegram Bot Token", ""),
         ("tg_chat_id", "Telegram Chat ID", ""),
         ("tg_auto", "التفعيل التلقائي", "0"),
+        ("ui_font_scale", "حجم الخط", "110"),
+        ("ui_line_height", "تباعد الأسطر", "1.65"),
+        ("ui_density", "كثافة العرض", "balanced"),
+        ("ui_separator_strength", "قوة الفواصل", "strong"),
+        ("ui_font_family", "نوع الخط", "system"),
     ]
 
     if request.method == "POST":
         for key, _, default in keys:
             value = request.form.get(key, default).strip()
+            if key.startswith("ui_"):
+                value = _sanitize_ui_setting(key, value, default)
             set_setting(key, value)
         flash("تم حفظ الإعدادات.", "success")
         return redirect(url_for("settings"))

@@ -16,6 +16,9 @@ import subprocess
 import urllib.parse
 import urllib.request
 from datetime import datetime, date, timedelta
+from pathlib import Path
+from desktop_import_wizard import open_import_wizard
+from core.database import ensure_schema as shared_ensure_schema
 
 # ── دعم المظهر العصري ──────────────────────────────────────────
 try:
@@ -551,6 +554,10 @@ class DBManager:
         """, (code, name_ar, category, int(has_qty), unit, max_sort))
 
 db = DBManager(DB_PATH)
+try:
+    shared_ensure_schema(Path(DB_PATH))
+except Exception:
+    pass
 
 # ════════════════════════════════════════════════════════════════
 # نظام الحماية والتفعيل (Licensing System)
@@ -4058,6 +4065,25 @@ class ReportsHub(ToplevelBase):
         UIButton(f_onyx, text="استيراد الآن", font=FT_BODY, cursor="hand2",
                  relief="flat", padx=16, command=self.master._open_onyx_importer).pack(side="left")
 
+        f_v4 = UIFrame(F, bg="#eaf5ff", pady=16, padx=20, relief="solid", bd=1)
+        f_v4.pack(fill="x", padx=30, pady=10)
+        UILabel(
+            f_v4,
+            text="📥 استيراد poultry_v4 الذكي (ملف أو مجلد)\nمع شاشة مراجعة وتصنيف قبل الحفظ النهائي",
+            font=FT_BODY,
+            bg="#eaf5ff",
+            justify="right",
+        ).pack(side="right")
+        UIButton(
+            f_v4,
+            text="فتح معالج الاستيراد",
+            font=FT_BODY,
+            cursor="hand2",
+            relief="flat",
+            padx=16,
+            command=self.master._open_poultry_v4_importer,
+        ).pack(side="left")
+
 
 class CostTypesManager(ToplevelBase):
     CATEGORIES_COST = ["مواد", "نقل", "مرافق", "صحة", "تشغيل", "رواتب", "إشراف", "إدارة", "عقارات", "أخرى"]
@@ -5419,6 +5445,7 @@ class MainWindow(WindowBase):
     def _open_about(self): AboutWindow(self)
     def _open_settings(self): SystemSettingsWindow(self)
     def _open_onyx_importer(self): OnyxImporterWindow(self)
+    def _open_poultry_v4_importer(self): open_import_wizard(self)
     def _backup(self): make_backup(); messagebox.showinfo("نسخ احتياطي", "تم حفظ النسخة الاحتياطية بنجاح")
 
     # ══ ميزة نقل الدفعة (Batch Portability) ══════════════════════

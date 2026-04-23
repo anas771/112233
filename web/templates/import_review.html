@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}مراجعة الاستيراد{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>مراجعة وتصنيف البنود - Run #{{ run['id'] }}</h2>
+  </div>
+  <p>البروفايل: {{ run['profile_name'] or '-' }} | الحالة: {{ run['status'] }} | البنود غير المحسومة: {{ unresolved_count }}</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>الملف</th>
+          <th>الحالة</th>
+          <th>ملاحظة</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in run_files %}
+        <tr>
+          <td>{{ f['file_name'] }}</td>
+          <td>{{ f['status'] }}</td>
+          <td>{{ f['reason'] or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h3>ربط البنود</h3>
+  </div>
+  <form method="post" action="{{ url_for('imports_run_mapping', run_id=run['id']) }}" class="stack-form">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>الملف</th>
+            <th>الشيت</th>
+            <th>الصف</th>
+            <th>البند</th>
+            <th>الكمية</th>
+            <th>القيمة</th>
+            <th>النوع</th>
+            <th>رمز موجود</th>
+            <th>اسم بند جديد</th>
+            <th>الفئة</th>
+            <th>الوحدة</th>
+            <th>له كمية</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in lines %}
+          {% set default_kind = line['target_kind'] if line['target_kind'] in ['cost', 'revenue', 'ignore'] else (line['payload'].get('side') if line['payload'] else 'ignore') %}
+          <tr>
+            <td>{{ line['file_name'] }}</td>
+            <td>{{ line['source_sheet'] }}</td>
+            <td>{{ line['source_row'] }}</td>
+            <td>
+              {{ line['source_label_raw'] }}
+              <input type="hidden" name="line_id" value="{{ line['id'] }}">
+            </td>
+            <td>{{ line['qty']|num(2) }}</td>
+            <td>{{ line['amount']|num(2) }}</td>
+            <td>
+              <select name="kind_{{ line['id'] }}">
+                <option value="ignore" {% if default_kind == 'ignore' %}selected{% endif %}>تجاهل</option>
+                <option value="cost" {% if default_kind == 'cost' %}selected{% endif %}>مصروف</option>
+                <option value="revenue" {% if default_kind == 'revenue' %}selected{% endif %}>إيراد</option>
+              </select>
+            </td>
+            <td>
+              <select name="existing_code_{{ line['id'] }}">
+                <option value="">بدون</option>
+                <optgroup label="أنواع المصاريف">
+                  {% for t in cost_types %}
+                  <option value="{{ t['code'] }}" {% if line['target_code'] == t['code'] %}selected{% endif %}>{{ t['code'] }} - {{ t['name_ar'] }}</option>
+                  {% endfor %}
+                </optgroup>
+                <optgroup label="أنواع الإيرادات">
+                  {% for t in revenue_types %}
+                  <option value="{{ t['code'] }}" {% if line['target_code'] == t['code'] %}selected{% endif %}>{{ t['code'] }} - {{ t['name_ar'] }}</option>
+                  {% endfor %}
+                </optgroup>
+              </select>
+            </td>
+            <td><input type="text" name="new_name_{{ line['id'] }}" value="{{ line['target_name'] or '' }}" placeholder="مثال: مصروف جديد"></td>
+            <td><input type="text" name="category_{{ line['id'] }}" value="{{ line['category'] or '' }}" placeholder="أخرى"></td>
+            <td><input type="text" name="unit_{{ line['id'] }}" value="{{ line['unit'] or '' }}" placeholder="كيس / ريال"></td>
+            <td style="text-align:center;"><input type="checkbox" name="has_qty_{{ line['id'] }}" {% if line['has_qty'] %}checked{% endif %}></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="12">لا توجد بنود مرشحة تتطلب ربطًا.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="submit">حفظ التصنيفات</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h3>اعتماد التنفيذ</h3>
+  </div>
+  <form method="post" action="{{ url_for('imports_run_commit', run_id=run['id']) }}" class="grid-2">
+    <label>وضع الدفعة
+      <select name="batch_mode">
+        <option value="create" {% if run['batch_mode'] == 'create' %}selected{% endif %}>Create</option>
+        <option value="update" {% if run['batch_mode'] == 'update' %}selected{% endif %}>Update</option>
+      </select>
+    </label>
+    <label>وضع الدمج
+      <select name="merge_mode">
+        <option value="replace">Replace</option>
+        <option value="merge">Merge</option>
+      </select>
+    </label>
+    <label>الدفعة المستهدفة (اختياري لوضع Update)
+      <input type="number" min="1" name="target_batch_id" value="{{ run['target_batch_id'] or '' }}">
+    </label>
+    <div class="inline-actions" style="align-self:end;">
+      <button type="submit">تنفيذ الاستيراد الآن</button>
+      <a class="btn-link" href="{{ url_for('imports_run_result', run_id=run['id']) }}">عرض تقرير آخر تنفيذ</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
